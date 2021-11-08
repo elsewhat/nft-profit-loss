@@ -1,3 +1,4 @@
+
 import requests
 import sys
 import json
@@ -10,7 +11,24 @@ class WalletNFTHistory:
         self.wallet = wallet
     
     def processOpenseaAPIResponse(self, openseaEvents):
-        print(openseaEvents)
+        
+        #print(json.dumps(openseaEvents,indent=4))
+        for openseaEvent in openseaEvents['asset_events']:
+            event_type = openseaEvent['event_type']
+            
+            # payment_token maybe null, so cannot chain easily in python
+            payment_token = openseaEvent.get('payment_token')
+            if payment_token is not None:
+                usd_price = payment_token.get('usd_price')
+                payment_token = payment_token.get('symbol')
+
+            if event_type=='successful':
+                transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],openseaEvent['total_price'],openseaEvent['quantity'], payment_token, usd_price, openseaEvent['seller']['address'], openseaEvent['winner_account']['address'])
+            elif event_type=='transfer':
+                transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],openseaEvent['total_price'],openseaEvent['quantity'], payment_token, usd_price, openseaEvent['from_account']['address'], openseaEvent['to_account']['address'])
+            print(transaction)
+
+
 
 
 class NFT:
@@ -26,6 +44,8 @@ class NFT:
         self.imageUrl = imageUrl
         self.imagePreviewUrl = imagePreviewUrl
 
+    def __str__(self):
+        return  str(self.__class__) + ' - '+ ','.join(('{} = {}'.format(item, self.__dict__[item]) for item in self.__dict__))
 
 class Transaction:
     def __init__(self, transactionHash,price,quantity,paymentToken, usdPrice, walletSeller, walletBuyer):
@@ -47,18 +67,21 @@ class Transaction:
         if self.walletBuyer==wallet:
             return True
         else: 
-            return False            
+            return False
+
+    def __str__(self):
+        return  str(self.__class__) + ' - '+ ','.join(('{} = {}'.format(item, self.__dict__[item]) for item in self.__dict__))                        
 
 
 def main():
-    wallet = sys.argv[0]
+    wallet = sys.argv[1]
     #openseaAPIKey = sys.argv[1]
     walletNFTHistory = WalletNFTHistory(wallet)
 
 
     query = {   'account_address':wallet, 
                 'event_type':'successful', 
-                'event_type':'transfer',
+                #'event_type':'transfer',
                 'only_opensea':False,
                 #'occured_before':'31.12.2021',  #Needs to be unix epoch style
                 #'occured_after':'01.01.2021',
@@ -66,7 +89,8 @@ def main():
                 'limit':1}
 
     headers = { #'X-API-KEY': openseaAPIKey,
-                'Accepts':'application/json'}                
+                'Accepts':'application/json'}      
+    print(query)
     try:
         response = requests.get('https://api.opensea.io/api/v1/events', params=query,headers=headers)
         response.raise_for_status()
