@@ -61,13 +61,22 @@ class WalletNFTHistory:
         print("NFT profits:")
         print('"NFT name"\tProfit:\tSell price:\tBuy price:')
         profits = 0.0
+        totalBuyForUnsold=0.0
+        totalSoldMissingBuy=0.0
         for nftKey in self.nfts:
             nft = self.nfts[nftKey]
             if nft.buyTransaction and nft.sellTransaction:
                 print(nft)
                 profits += nft.getProfits()
+            elif nft.buyTransaction:
+                totalBuyForUnsold+= nft.buyTransaction.usdPrice
+            elif nft.sellTransaction:
+                totalSoldMissingBuy+= nft.sellTransaction.usdPrice
 
         print("Profits (USD) {:.2f}".format(profits))
+
+        print("Total buy price for unsold nfts {:.2f}".format(totalBuyForUnsold))
+        print("Total sell price where missing buy transaction {:.2f}".format(totalSoldMissingBuy))
 
 class NFT:
     buyTransaction = None
