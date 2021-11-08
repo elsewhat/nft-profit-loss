@@ -20,41 +20,53 @@ class WalletNFTHistory:
         # Process all events from the API
         # Each transaction will either create a new NFT object or add a buy/sell transaction to an existing NFT
         for openseaEvent in openseaEvents['asset_events']:
-            event_type = openseaEvent['event_type']
+            try:
+                event_type = openseaEvent['event_type']
 
-            #id of asset
-            asset_id = openseaEvent['asset']['asset_contract']['address'] + '-' + openseaEvent['asset']['token_id']
-            
-            # payment_token maybe null, so cannot chain easily in python
-            payment_token = openseaEvent.get('payment_token')
-            if payment_token is not None:
-                ethereum_usd_price_now = float(payment_token.get('usd_price'))
-                price_in_wei = float(openseaEvent['total_price'])
-                payment_token = payment_token.get('symbol')
-                usd_price = (price_in_wei*1.0e-18)*ethereum_usd_price_now
-            else:
-                usd_price=None
-
-            if event_type=='successful':
-                transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],price_in_wei,openseaEvent['quantity'], payment_token, usd_price, openseaEvent['seller']['address'], openseaEvent['winner_account']['address'])
-            elif event_type=='transfer':
-                transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],price_in_wei,openseaEvent['quantity'], payment_token, usd_price, openseaEvent['from_account']['address'], openseaEvent['to_account']['address'])
-            #print(transaction)
-
-            # Create new NFT or add transaction to existing NFT
-            if asset_id not in self.nfts:
-                #print('New NFT found')
-                nft  = NFT(openseaEvent['asset']['asset_contract']['address'] ,openseaEvent['asset']['name'],openseaEvent['asset']['description'],openseaEvent['asset']['token_id'],openseaEvent['asset']['permalink'],openseaEvent['asset']['image_url'],openseaEvent['asset']['image_preview_url'],)   
-            else:
-                #print('Add transaction to existing NFT')
-                nft = self.nfts.get(asset_id)
+                #id of asset
+                asset_id = openseaEvent['asset']['asset_contract']['address'] + '-' + openseaEvent['asset']['token_id']
                 
-            if transaction.isSeller(self.wallet):
-                nft.sellTransaction = transaction
-            else:
-                nft.buyTransaction = transaction
-            
-            self.nfts[asset_id]= nft
+                # payment_token maybe null, so cannot chain easily in python
+                payment_token = openseaEvent.get('payment_token')
+                if payment_token is not None:
+                    ethereum_usd_price_now = float(payment_token.get('usd_price'))
+                    price_in_wei = float(openseaEvent['total_price'])
+                    payment_token = payment_token.get('symbol')
+                    usd_price = (price_in_wei*1.0e-18)*ethereum_usd_price_now
+                else:
+                    usd_price=None
+
+                #seller may be in rare cases be null, so cannot chain easily
+                walletSeller = openseaEvent['seller']
+                if walletSeller is not None:
+                    walletSeller = walletSeller['address']
+                
+
+                if event_type=='successful':
+                    transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],price_in_wei,openseaEvent['quantity'], payment_token, usd_price, walletSeller, openseaEvent['winner_account']['address'])
+                elif event_type=='transfer':
+                    transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],price_in_wei,openseaEvent['quantity'], payment_token, usd_price, openseaEvent['from_account']['address'], openseaEvent['to_account']['address'])
+                #print(transaction)
+
+                # Create new NFT or add transaction to existing NFT
+                if asset_id not in self.nfts:
+                    #print('New NFT found')
+                    nft  = NFT(openseaEvent['asset']['asset_contract']['address'] ,openseaEvent['asset']['name'],openseaEvent['asset']['description'],openseaEvent['asset']['token_id'],openseaEvent['asset']['permalink'],openseaEvent['asset']['image_url'],openseaEvent['asset']['image_preview_url'],)   
+                else:
+                    #print('Add transaction to existing NFT')
+                    nft = self.nfts.get(asset_id)
+                    
+                if transaction.isSeller(self.wallet):
+                    nft.sellTransaction = transaction
+                else:
+                    nft.buyTransaction = transaction
+                
+                self.nfts[asset_id]= nft
+            except BaseException as ex:
+                print("Failed parsing transaction")
+                print(ex)
+                print(json.dumps(openseaEvent,indent=4))
+                raise
         
 
     def listNFTs(self):
@@ -118,7 +130,13 @@ class NFT:
                 profitColor = Back.RED
             elif self.sellTransaction.usdPrice== self.buyTransaction.usdPrice:
                 profitColor = Back.WHITE
-            return [self.nftName, profitColor +'{:.2f}'.format(self.sellTransaction.usdPrice- self.buyTransaction.usdPrice)+Back.RESET,  '{:.1f}'.format((self.sellTransaction.usdPrice/self.buyTransaction.usdPrice)*100),'{:.2f}'.format(self.sellTransaction.usdPrice),'{:.2f}'.format(self.buyTransaction.usdPrice)]
+
+            profitPercentage=100.0
+            #Avoid divide by zero in rare cases
+            if self.buyTransaction.usdPrice>0.0:
+                profitPercentage = (self.sellTransaction.usdPrice/self.buyTransaction.usdPrice)*100
+            
+            return [self.nftName, profitColor +'{:.2f}'.format(self.sellTransaction.usdPrice- self.buyTransaction.usdPrice)+Back.RESET,  '{:.1f}'.format(profitPercentage),'{:.2f}'.format(self.sellTransaction.usdPrice),'{:.2f}'.format(self.buyTransaction.usdPrice)]
         elif self.buyTransaction:
             return [self.nftName, '', '','{:.2f}'.format(self.buyTransaction.usdPrice)]
         elif self.sellTransaction:
@@ -165,9 +183,9 @@ def main():
                 #'occured_before':'31.12.2021',  #Needs to be unix epoch style
                 #'occured_after':'01.01.2021',
                 'offset': 0,
-                'limit':200}
+                'limit':300}
 
-    headers = { #'X-API-KEY': openseaAPIKey,
+    headers = { #'X-API-KEY': 'xxx',
                 'Accepts':'application/json'}      
     #print(query)
     try:
