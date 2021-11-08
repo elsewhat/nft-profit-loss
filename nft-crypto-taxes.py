@@ -2,6 +2,8 @@
 import requests
 import sys
 import json
+from colorama import init, Fore, Back, Style
+from tabulate import tabulate
 
 class WalletNFTHistory: 
     wallet = None
@@ -59,19 +61,22 @@ class WalletNFTHistory:
         
         #NFTs with both buy and sold transaction
         print("NFT profits:")
-        print('"NFT name"\tProfit:\tSell price:\tBuy price:')
+        #print('"NFT name"\tProfit:\tSell price:\tBuy price:')
+        table_data=[["NFT name","Profit","% profit","Sell price","Buy price"]]
         profits = 0.0
         totalBuyForUnsold=0.0
         totalSoldMissingBuy=0.0
         for nftKey in self.nfts:
             nft = self.nfts[nftKey]
             if nft.buyTransaction and nft.sellTransaction:
-                print(nft)
+                table_data.append(nft.getTableOutput())
                 profits += nft.getProfits()
             elif nft.buyTransaction:
                 totalBuyForUnsold+= nft.buyTransaction.usdPrice
             elif nft.sellTransaction:
                 totalSoldMissingBuy+= nft.sellTransaction.usdPrice
+
+        print(tabulate(table_data,headers="firstrow",tablefmt="github"))
 
         print("Profits (USD) {:.2f}".format(profits))
 
@@ -105,6 +110,19 @@ class NFT:
             return self.sellTransaction.usdPrice- self.buyTransaction.usdPrice
         else:
             return 0.0
+
+    def getTableOutput(self):
+        if self.buyTransaction and self.sellTransaction:
+            profitColor = Back.GREEN
+            if self.sellTransaction.usdPrice< self.buyTransaction.usdPrice:
+                profitColor = Back.RED
+            elif self.sellTransaction.usdPrice== self.buyTransaction.usdPrice:
+                profitColor = Back.WHITE
+            return [self.nftName, profitColor +'{:.2f}'.format(self.sellTransaction.usdPrice- self.buyTransaction.usdPrice)+Back.RESET,  '{:.1f}'.format((self.sellTransaction.usdPrice/self.buyTransaction.usdPrice)*100),'{:.2f}'.format(self.sellTransaction.usdPrice),'{:.2f}'.format(self.buyTransaction.usdPrice)]
+        elif self.buyTransaction:
+            return [self.nftName, '', '','{:.2f}'.format(self.buyTransaction.usdPrice)]
+        elif self.sellTransaction:
+            return [self.nftName, '', '{:.2f}'.format(self.sellTransaction.usdPrice),'']   
 
 class Transaction:
     def __init__(self, transactionHash,price,quantity,paymentToken, usdPrice, walletSeller, walletBuyer):
