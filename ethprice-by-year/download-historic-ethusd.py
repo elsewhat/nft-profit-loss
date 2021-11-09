@@ -7,10 +7,10 @@ def main():
     outputFilename = sys.argv[1]
     with open(outputFilename, 'w') as outputFile:
 
-        requestDate = datetime.datetime(2021,1,1)
-        endDate = datetime.datetime(2021,12,31)
+        requestDate = datetime.datetime(2015,7,30)
+        endDate = datetime.datetime(2015,12,31)
 
-        headers = { 'Authorization':'Authorization: Bearer xxx'}    
+        headers = { 'Authorization':'Authorization: Bearer abd90df5f27a7b170cd775abf89d632b350b7c1c9d53e08b340cd9832ce52c2c'}    
         while requestDate <= endDate:
             query = {'date': requestDate.strftime('%Y-%m-%d') }
 
