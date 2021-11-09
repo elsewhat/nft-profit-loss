@@ -8,9 +8,11 @@ from tabulate import tabulate
 class WalletNFTHistory: 
     wallet = None
     nfts = {}
+    historicEthPrice={}
 
-    def __init__(self, wallet):
+    def __init__(self, wallet,historicEthPrice):
         self.wallet = wallet
+        self.historicEthPrice = historicEthPrice
     
     def processOpenseaAPIResponse(self, openseaEvents):
         
@@ -170,10 +172,24 @@ class Transaction:
         return  'Transaction: '+ ','.join(('{} = {}'.format(item, self.__dict__[item]) for item in self.__dict__))                        
 
 
+def getHistoricEthPrice():
+    historicEthPrice = {}
+    with open('ethprice.csv', 'r') as file:
+       line = file.readline() 
+       priceDate = line.split(",")[0]
+       ethPrice = float(line.split(",")[1])
+       historicEthPrice[priceDate]=ethPrice
+
+    return historicEthPrice
+
+
 def main():
     wallet = sys.argv[1]
     #openseaAPIKey = sys.argv[1]
-    walletNFTHistory = WalletNFTHistory(wallet)
+
+    historicEthPrice = getHistoricEthPrice()
+
+    walletNFTHistory = WalletNFTHistory(wallet,historicEthPrice)
 
 
     query = {   'account_address':wallet, 
