@@ -25,11 +25,12 @@ class WalletNFTHistory:
         # Each transaction will either create a new NFT object or add a buy/sell transaction to an existing NFT
         for openseaEvent in openseaEvents['asset_events']:
             try:
-                event_type = openseaEvent['event_type']
+                eventType = openseaEvent['event_type']
 
                 #id of asset
                 asset_id = openseaEvent['asset']['asset_contract']['address'] + '-' + openseaEvent['asset']['token_id']
                 
+
                 # payment_token maybe null, so cannot chain easily in python
                 payment_token = openseaEvent.get('payment_token')
                 if payment_token is not None:
@@ -42,7 +43,9 @@ class WalletNFTHistory:
                     paymentToken = payment_token.get('symbol')
                     usdPrice = (priceInWei*1.0e-18)*ethpriceAtTransaction
                 else:
-                    usd_price=None
+                    priceInWei=0
+                    usdPrice=0.0
+                    paymentToken=None
 
                 #seller may be in rare cases be null, so cannot chain easily
                 walletSeller = openseaEvent['seller']
@@ -50,9 +53,9 @@ class WalletNFTHistory:
                     walletSeller = walletSeller['address']
                 
 
-                if event_type=='successful':
+                if eventType=='successful':
                     transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],priceInWei,openseaEvent['quantity'], paymentToken, usdPrice, walletSeller, openseaEvent['winner_account']['address'])
-                elif event_type=='transfer':
+                elif eventType=='transfer':
                     transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],priceInWei,openseaEvent['quantity'], paymentToken, usdPrice, openseaEvent['from_account']['address'], openseaEvent['to_account']['address'])
                 #print(transaction)
 
@@ -65,9 +68,16 @@ class WalletNFTHistory:
                     nft = self.nfts.get(asset_id)
                     
                 if transaction.isSeller(self.wallet):
-                    nft.sellTransaction = transaction
+                    # Only apply transfer event if there is no 'successful' (ie. purchase) event
+                    if eventType =='successful':
+                        nft.sellTransaction = transaction
+                    elif eventType =='transfer' and not nft.sellTransaction:
+                        nft.sellTransaction = transaction 
                 else:
-                    nft.buyTransaction = transaction
+                    if eventType =='successful':
+                        nft.buyTransaction = transaction
+                    elif eventType =='transfer' and not nft.buyTransaction:
+                        nft.buyTransaction = transaction
                 
                 self.nfts[asset_id]= nft
             except BaseException as ex:
@@ -83,7 +93,7 @@ class WalletNFTHistory:
         print("NFT profits:")
         #print('"NFT name"\tProfit:\tSell price:\tBuy price:')
         nftsTraded=[["NFT name","Profit","% profit","Sell price","Buy price"]]
-        nftsBought=[["NFT name","Profit","% profit","Sell price","Buy price"]]
+        nftsBought=[["NFT name","Buy price","Crypto price","Break even"]]
         nftsOnlySold=[["NFT name","Profit","% profit","Sell price","Buy price"]]
         profits = 0.0
         totalBuyForUnsold=0.0
@@ -154,7 +164,13 @@ class NFT:
             
             return [self.nftName, profitColor +'{:.2f}'.format(self.sellTransaction.usdPrice- self.buyTransaction.usdPrice)+Back.RESET,  '{:.1f}'.format(profitPercentage),'{:.2f}'.format(self.sellTransaction.usdPrice),'{:.2f}'.format(self.buyTransaction.usdPrice)]
         elif self.buyTransaction:
-            return [self.nftName, '', '','','{:.2f}'.format(self.buyTransaction.usdPrice)]
+            #nftsBought=[["NFT name","Buy price","Crypto price","Break even"]]
+            #TODO Avoid hardcoding eth price
+            ethPriceNow = 4811.89
+            breakEven = self.buyTransaction.usdPrice/ethPriceNow
+
+
+            return [self.nftName,'{:.2f}'.format(self.buyTransaction.usdPrice), '{:.2f} {}'.format(self.buyTransaction.price*1.0e-18, self.buyTransaction.paymentToken), '{:.2f} ETH'.format(breakEven)]
         elif self.sellTransaction:
             return [self.nftName, '', '','{:.2f}'.format(self.sellTransaction.usdPrice),'']   
 
@@ -244,6 +260,27 @@ def main():
             
             # Additional code will only run if the request is successful
             offset+=300
+        offset= 0
+        while True:
+            query = {   
+                'account_address':wallet, 
+                'event_type':'transfer',
+                'only_opensea':False,
+                'offset': offset,
+                'limit':300}
+            print(query.items())
+            response = requests.get('https://api.opensea.io/api/v1/events', params=query,headers=headers)
+            response.raise_for_status()
+
+            openseaEvents = response.json()
+            if not openseaEvents['asset_events']:
+                #No events returned from Opensea API
+                break
+            else:
+                walletNFTHistory.processOpenseaAPIResponse(openseaEvents)
+            
+            # Additional code will only run if the request is successful
+            offset+=300            
 
         walletNFTHistory.listNFTs()            
     except requests.exceptions.HTTPError as error:
