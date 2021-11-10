@@ -35,12 +35,12 @@ class WalletNFTHistory:
                 asset_id = openseaEvent['asset']['asset_contract']['address'] + '-' + openseaEvent['asset']['token_id']
                 
 
-                # payment_token maybe null, so cannot chain easily in python
-                payment_token = openseaEvent.get('payment_token')
-                if payment_token is not None:
+                transactionDate = datetime.strptime(openseaEvent['transaction']['timestamp'],'%Y-%m-%dT%H:%M:%S')
+
+                if eventType=='successful':
                     #ethereum_usd_price_now = float(payment_token.get('usd_price'))
-                    transactionDate = datetime.strptime(openseaEvent['transaction']['timestamp'],'%Y-%m-%dT%H:%M:%S')
                     
+                    payment_token = openseaEvent.get('payment_token')
                     #Lookup eth price from dictionary (key is 'yyyy-mm-dd')
                     ethpriceAtTransaction = self.historicEthPrice[transactionDate.strftime('%Y-%m-%d')]
                     priceInWei = float(openseaEvent['total_price'])
@@ -58,13 +58,13 @@ class WalletNFTHistory:
                 
 
                 if eventType=='successful':
-                    transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],priceInWei,openseaEvent['quantity'], paymentToken, usdPrice, walletSeller, openseaEvent['winner_account']['address'])
+                    transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],transactionDate,priceInWei,openseaEvent['quantity'], paymentToken, usdPrice, walletSeller, openseaEvent['winner_account']['address'])
                 elif eventType=='transfer':
                     if openseaEvent['transaction']:
                         transactionHash = openseaEvent['transaction']['transaction_hash']
                     else:#Some older transer events have transaction: null
                         transactionHash = openseaEvent['created_date']
-                    transaction  = Transaction(transactionHash,priceInWei,openseaEvent['quantity'], paymentToken, usdPrice, openseaEvent['from_account']['address'], openseaEvent['to_account']['address'])
+                    transaction  = Transaction(transactionHash,transactionDate,priceInWei,openseaEvent['quantity'], paymentToken, usdPrice, openseaEvent['from_account']['address'], openseaEvent['to_account']['address'])
                 #print(transaction)
 
                 # Create new NFT or add transaction to existing NFT
@@ -104,21 +104,21 @@ class WalletNFTHistory:
         #NFTs with both buy and sold transaction
         print("NFT profits:")
         #Table setup ref https://pypi.org/project/prettytable/
-        nftsTraded = PrettyTable(["NFT name","Profit USD","% profit","Sell USD","Buy USD"])
+        nftsTraded = PrettyTable(["NFT name","Date","Profit USD","% profit","Sell USD","Buy USD"])
         nftsTraded.set_style(DOUBLE_BORDER)
         nftsTraded.float_format=".2"
         nftsTraded.sortby="Sell USD"
         nftsTraded.reversesort=True
         nftsTraded.align = "l"
 
-        nftsBought = PrettyTable(["NFT name","Buy USD","Buy ETH","Break-even ETH"])
+        nftsBought = PrettyTable(["NFT name","Date","Buy USD","Buy ETH","Break-even ETH"])
         nftsBought.set_style(DOUBLE_BORDER)
         nftsBought.float_format=".2"
         nftsBought.sortby="Buy USD"
         nftsBought.reversesort=True
         nftsBought.align = "l"        
 
-        nftsOnlySold = PrettyTable(["NFT name","Profit","% profit","Sell USD","Buy USD"])
+        nftsOnlySold = PrettyTable(["NFT name","Date","Profit","% profit","Sell USD","Buy USD"])
         nftsOnlySold.set_style(DOUBLE_BORDER)
         nftsOnlySold.float_format=".2"
         nftsOnlySold.sortby="Sell USD"
@@ -194,20 +194,21 @@ class NFT:
             if self.buyTransaction.usdPrice>0.0:
                 profitPercentage = ((self.sellTransaction.usdPrice-self.buyTransaction.usdPrice)/self.buyTransaction.usdPrice)*100
             
-            return [self.nftName, profitColor +'{:.2f}'.format(self.sellTransaction.usdPrice- self.buyTransaction.usdPrice)+Back.RESET,  profitPercentage,self.sellTransaction.usdPrice,self.buyTransaction.usdPrice]
+            return [self.nftName, "{} => {}".format(self.buyTransaction.transactionDate.strftime('%Y-%m-%d'),self.sellTransaction.transactionDate.strftime('%Y-%m-%d')),profitColor +'{:.2f}'.format(self.sellTransaction.usdPrice- self.buyTransaction.usdPrice)+Back.RESET,  profitPercentage,self.sellTransaction.usdPrice,self.buyTransaction.usdPrice]
         elif self.buyTransaction:
             #TODO Avoid hardcoding eth price
             ethPriceNow = 4811.89
             breakEven = self.buyTransaction.usdPrice/ethPriceNow
 
 
-            return [self.nftName,self.buyTransaction.usdPrice, self.buyTransaction.price*1.0e-18, breakEven]
+            return [self.nftName,"{}".format(self.buyTransaction.transactionDate.strftime('%Y-%m-%d')),self.buyTransaction.usdPrice, self.buyTransaction.price*1.0e-18, breakEven]
         elif self.sellTransaction:
-            return [self.nftName, '', '',self.sellTransaction.usdPrice,'']   
+            return [self.nftName,"{}".format(self.sellTransaction.transactionDate.strftime('%Y-%m-%d')), '', '',self.sellTransaction.usdPrice,'']   
 
 class Transaction:
-    def __init__(self, transactionHash,price,quantity,paymentToken, usdPrice, walletSeller, walletBuyer):
+    def __init__(self, transactionHash,transactionDate, price,quantity,paymentToken, usdPrice, walletSeller, walletBuyer):
         self.transactionHash=transactionHash
+        self.transactionDate=transactionDate
         self.price = price
         self.quantity = quantity
         self.paymentToken=paymentToken
