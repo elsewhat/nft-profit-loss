@@ -56,7 +56,11 @@ class WalletNFTHistory:
                 if eventType=='successful':
                     transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],priceInWei,openseaEvent['quantity'], paymentToken, usdPrice, walletSeller, openseaEvent['winner_account']['address'])
                 elif eventType=='transfer':
-                    transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],priceInWei,openseaEvent['quantity'], paymentToken, usdPrice, openseaEvent['from_account']['address'], openseaEvent['to_account']['address'])
+                    if openseaEvent['transaction']:
+                        transactionHash = openseaEvent['transaction']['transaction_hash']
+                    else:#Some older transer events have transaction: null
+                        transactionHash = openseaEvent['created_date']
+                    transaction  = Transaction(transactionHash,priceInWei,openseaEvent['quantity'], paymentToken, usdPrice, openseaEvent['from_account']['address'], openseaEvent['to_account']['address'])
                 #print(transaction)
 
                 # Create new NFT or add transaction to existing NFT
