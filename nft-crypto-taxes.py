@@ -4,6 +4,7 @@ import sys
 import json
 from colorama import init, Fore, Back, Style
 from tabulate import tabulate
+from datetime import datetime
 
 class WalletNFTHistory: 
     wallet = None
@@ -14,6 +15,7 @@ class WalletNFTHistory:
         self.wallet = wallet
         self.historicEthPrice = historicEthPrice
     
+    # Process the opensea response events
     def processOpenseaAPIResponse(self, openseaEvents):
         
         #debug only
@@ -31,10 +33,14 @@ class WalletNFTHistory:
                 # payment_token maybe null, so cannot chain easily in python
                 payment_token = openseaEvent.get('payment_token')
                 if payment_token is not None:
-                    ethereum_usd_price_now = float(payment_token.get('usd_price'))
-                    price_in_wei = float(openseaEvent['total_price'])
-                    payment_token = payment_token.get('symbol')
-                    usd_price = (price_in_wei*1.0e-18)*ethereum_usd_price_now
+                    #ethereum_usd_price_now = float(payment_token.get('usd_price'))
+                    transactionDate = datetime.strptime(openseaEvent['transaction']['timestamp'],'%Y-%m-%dT%H:%M:%S')
+                    
+                    #Lookup eth price from dictionary (key is 'yyyy-mm-dd')
+                    ethpriceAtTransaction = self.historicEthPrice[transactionDate.strftime('%Y-%m-%d')]
+                    priceInWei = float(openseaEvent['total_price'])
+                    paymentToken = payment_token.get('symbol')
+                    usdPrice = (priceInWei*1.0e-18)*ethpriceAtTransaction
                 else:
                     usd_price=None
 
@@ -45,9 +51,9 @@ class WalletNFTHistory:
                 
 
                 if event_type=='successful':
-                    transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],price_in_wei,openseaEvent['quantity'], payment_token, usd_price, walletSeller, openseaEvent['winner_account']['address'])
+                    transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],priceInWei,openseaEvent['quantity'], paymentToken, usdPrice, walletSeller, openseaEvent['winner_account']['address'])
                 elif event_type=='transfer':
-                    transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],price_in_wei,openseaEvent['quantity'], payment_token, usd_price, openseaEvent['from_account']['address'], openseaEvent['to_account']['address'])
+                    transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],priceInWei,openseaEvent['quantity'], paymentToken, usdPrice, openseaEvent['from_account']['address'], openseaEvent['to_account']['address'])
                 #print(transaction)
 
                 # Create new NFT or add transaction to existing NFT
@@ -171,14 +177,15 @@ class Transaction:
     def __str__(self):
         return  'Transaction: '+ ','.join(('{} = {}'.format(item, self.__dict__[item]) for item in self.__dict__))                        
 
-
+# Parse ethprice.csv into a dict object 
 def getHistoricEthPrice():
     historicEthPrice = {}
     with open('ethprice.csv', 'r') as file:
-       line = file.readline() 
-       priceDate = line.split(",")[0]
-       ethPrice = float(line.split(",")[1])
-       historicEthPrice[priceDate]=ethPrice
+        for line in file:
+            line = line.rstrip()
+            priceDate = line.split(",")[0]
+            ethPrice = float(line.split(",")[1])
+            historicEthPrice[priceDate]=ethPrice
 
     return historicEthPrice
 
@@ -187,6 +194,7 @@ def main():
     wallet = sys.argv[1]
     #openseaAPIKey = sys.argv[1]
 
+    # Parse ethprice.csv into a dict object 
     historicEthPrice = getHistoricEthPrice()
 
     walletNFTHistory = WalletNFTHistory(wallet,historicEthPrice)
