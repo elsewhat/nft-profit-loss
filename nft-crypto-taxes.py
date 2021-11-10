@@ -111,7 +111,7 @@ class WalletNFTHistory:
         nftsTraded.reversesort=True
         nftsTraded.align = "l"
 
-        nftsBought = PrettyTable(["NFT name","Bought","Buy USD","Buy ETH","Break-even ETH"])
+        nftsBought = PrettyTable(["NFT name","Bought","Days held","Buy USD","Buy ETH","Break-even ETH"])
         nftsBought.set_style(DOUBLE_BORDER)
         nftsBought.float_format=".2"
         nftsBought.sortby="Buy USD"
@@ -202,8 +202,9 @@ class NFT:
             ethPriceNow = 4811.89
             breakEven = self.buyTransaction.usdPrice/ethPriceNow
 
+            daysHeld =(datetime.now()- self.buyTransaction.transactionDate).days
 
-            return [self.nftName,"{}".format(self.buyTransaction.transactionDate.strftime('%Y-%m-%d')),self.buyTransaction.usdPrice, self.buyTransaction.price*1.0e-18, breakEven]
+            return [self.nftName,"{}".format(self.buyTransaction.transactionDate.strftime('%Y-%m-%d')),daysHeld,self.buyTransaction.usdPrice, self.buyTransaction.price*1.0e-18, breakEven]
         elif self.sellTransaction:
             return [self.nftName,"{}".format(self.sellTransaction.transactionDate.strftime('%Y-%m-%d')), '', '',self.sellTransaction.usdPrice,'']   
 
