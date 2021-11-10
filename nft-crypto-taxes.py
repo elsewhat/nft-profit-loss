@@ -65,8 +65,12 @@ class WalletNFTHistory:
 
                 # Create new NFT or add transaction to existing NFT
                 if asset_id not in self.nfts:
-                    #print('New NFT found')
-                    nft  = NFT(openseaEvent['asset']['asset_contract']['address'] ,openseaEvent['asset']['name'],openseaEvent['asset']['description'],openseaEvent['asset']['token_id'],openseaEvent['asset']['permalink'],openseaEvent['asset']['image_url'],openseaEvent['asset']['image_preview_url'],)   
+                    nftName = openseaEvent['asset']['name']
+                    #Some asset names are None, so use collection in these cases to set name
+                    if not nftName:
+                        nftName = openseaEvent['asset']['collection']['name'] + ' #' + openseaEvent['asset']['token_id']
+
+                    nft  = NFT(openseaEvent['asset']['asset_contract']['address'] ,nftName,openseaEvent['asset']['description'],openseaEvent['asset']['token_id'],openseaEvent['asset']['permalink'],openseaEvent['asset']['image_url'],openseaEvent['asset']['image_preview_url'],)   
                 else:
                     #print('Add transaction to existing NFT')
                     nft = self.nfts.get(asset_id)
