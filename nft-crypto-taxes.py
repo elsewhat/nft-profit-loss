@@ -142,7 +142,7 @@ class NFT:
             profitPercentage=100.0
             #Avoid divide by zero in rare cases
             if self.buyTransaction.usdPrice>0.0:
-                profitPercentage = (self.sellTransaction.usdPrice/self.buyTransaction.usdPrice)*100
+                profitPercentage = ((self.sellTransaction.usdPrice-self.buyTransaction.usdPrice)/self.buyTransaction.usdPrice)*100
             
             return [self.nftName, profitColor +'{:.2f}'.format(self.sellTransaction.usdPrice- self.buyTransaction.usdPrice)+Back.RESET,  '{:.1f}'.format(profitPercentage),'{:.2f}'.format(self.sellTransaction.usdPrice),'{:.2f}'.format(self.buyTransaction.usdPrice)]
         elif self.buyTransaction:
