@@ -82,26 +82,34 @@ class WalletNFTHistory:
         #NFTs with both buy and sold transaction
         print("NFT profits:")
         #print('"NFT name"\tProfit:\tSell price:\tBuy price:')
-        table_data=[["NFT name","Profit","% profit","Sell price","Buy price"]]
+        nftsTraded=[["NFT name","Profit","% profit","Sell price","Buy price"]]
+        nftsBought=[["NFT name","Profit","% profit","Sell price","Buy price"]]
+        nftsOnlySold=[["NFT name","Profit","% profit","Sell price","Buy price"]]
         profits = 0.0
         totalBuyForUnsold=0.0
         totalSoldMissingBuy=0.0
         for nftKey in self.nfts:
             nft = self.nfts[nftKey]
             if nft.buyTransaction and nft.sellTransaction:
-                table_data.append(nft.getTableOutput())
+                nftsTraded.append(nft.getTableOutput())
                 profits += nft.getProfits()
             elif nft.buyTransaction:
+                nftsBought.append(nft.getTableOutput())
                 totalBuyForUnsold+= nft.buyTransaction.usdPrice
             elif nft.sellTransaction:
+                nftsOnlySold.append(nft.getTableOutput())
                 totalSoldMissingBuy+= nft.sellTransaction.usdPrice
 
-        print(tabulate(table_data,headers="firstrow",tablefmt="github"))
+        print(tabulate(nftsTraded,headers="firstrow",tablefmt="github"))
 
         print("Profits (USD) {:.2f}".format(profits))
 
         print("Total buy price for unsold nfts {:.2f}".format(totalBuyForUnsold))
         print("Total sell price where missing buy transaction {:.2f}".format(totalSoldMissingBuy))
+        print("Currently holding:")
+        print(tabulate(nftsBought,headers="firstrow",tablefmt="github"))
+        print("Missing buy transaction:")
+        print(tabulate(nftsOnlySold,headers="firstrow",tablefmt="github"))
 
 class NFT:
     buyTransaction = None
@@ -146,9 +154,9 @@ class NFT:
             
             return [self.nftName, profitColor +'{:.2f}'.format(self.sellTransaction.usdPrice- self.buyTransaction.usdPrice)+Back.RESET,  '{:.1f}'.format(profitPercentage),'{:.2f}'.format(self.sellTransaction.usdPrice),'{:.2f}'.format(self.buyTransaction.usdPrice)]
         elif self.buyTransaction:
-            return [self.nftName, '', '','{:.2f}'.format(self.buyTransaction.usdPrice)]
+            return [self.nftName, '', '','','{:.2f}'.format(self.buyTransaction.usdPrice)]
         elif self.sellTransaction:
-            return [self.nftName, '', '{:.2f}'.format(self.sellTransaction.usdPrice),'']   
+            return [self.nftName, '', '','{:.2f}'.format(self.sellTransaction.usdPrice),'']   
 
 class Transaction:
     def __init__(self, transactionHash,price,quantity,paymentToken, usdPrice, walletSeller, walletBuyer):
