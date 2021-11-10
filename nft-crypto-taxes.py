@@ -110,6 +110,7 @@ class WalletNFTHistory:
                 nftsOnlySold.append(nft.getTableOutput())
                 totalSoldMissingBuy+= nft.sellTransaction.usdPrice
 
+        nftsTraded.sort(key=lambda x: x[3], reverse=True)
         print(tabulate(nftsTraded,headers="firstrow",tablefmt="github"))
 
         print("Profits (USD) {:.2f}".format(profits))
@@ -117,6 +118,7 @@ class WalletNFTHistory:
         print("Total buy price for unsold nfts {:.2f}".format(totalBuyForUnsold))
         print("Total sell price where missing buy transaction {:.2f}".format(totalSoldMissingBuy))
         print("Currently holding:")
+        nftsBought.sort(key=lambda x: x[2], reverse=True)
         print(tabulate(nftsBought,headers="firstrow",tablefmt="github"))
         print("Missing buy transaction:")
         print(tabulate(nftsOnlySold,headers="firstrow",tablefmt="github"))
