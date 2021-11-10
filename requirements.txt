@@ -1,3 +1,4 @@
 requests
 colorama
 tabulate
+-e git://github.com/jazzband/prettytable.git#egg=prettytable

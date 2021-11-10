@@ -3,8 +3,8 @@ import requests
 import sys
 import json
 from colorama import init, Fore, Back, Style
-from tabulate import tabulate
 from datetime import datetime
+from prettytable import PrettyTable
 
 class WalletNFTHistory: 
     wallet = None
@@ -100,36 +100,40 @@ class WalletNFTHistory:
         #NFTs with both buy and sold transaction
         print("NFT profits:")
         #print('"NFT name"\tProfit:\tSell price:\tBuy price:')
-        nftsTraded=[["NFT name","Profit","% profit","Sell price","Buy price"]]
-        nftsBought=[["NFT name","Buy price","Crypto price","Break even"]]
-        nftsOnlySold=[["NFT name","Profit","% profit","Sell price","Buy price"]]
+        nftsTraded = PrettyTable()
+        nftsTraded.field_names =["NFT name","Profit","% profit","Sell price","Buy price"]
+
+        nftsBought = PrettyTable()
+        nftsBought.field_names=["NFT name","Buy price","Crypto price","Break even"]
+
+        nftsOnlySold = PrettyTable()
+        nftsOnlySold.field_names=["NFT name","Profit","% profit","Sell price","Buy price"]
+
         profits = 0.0
         totalBuyForUnsold=0.0
         totalSoldMissingBuy=0.0
         for nftKey in self.nfts:
             nft = self.nfts[nftKey]
             if nft.buyTransaction and nft.sellTransaction:
-                nftsTraded.append(nft.getTableOutput())
+                nftsTraded.add_row(nft.getTableOutput())
                 profits += nft.getProfits()
             elif nft.buyTransaction:
-                nftsBought.append(nft.getTableOutput())
+                nftsBought.add_row(nft.getTableOutput())
                 totalBuyForUnsold+= nft.buyTransaction.usdPrice
             elif nft.sellTransaction:
-                nftsOnlySold.append(nft.getTableOutput())
+                nftsOnlySold.add_row(nft.getTableOutput())
                 totalSoldMissingBuy+= nft.sellTransaction.usdPrice
-
-        nftsTraded.sort(key=lambda x: x[3], reverse=True)
-        print(tabulate(nftsTraded,headers="firstrow",tablefmt="github"))
+        print(nftsTraded)
 
         print("Profits (USD) {:.2f}".format(profits))
 
         print("Total buy price for unsold nfts {:.2f}".format(totalBuyForUnsold))
         print("Total sell price where missing buy transaction {:.2f}".format(totalSoldMissingBuy))
+        
         print("Currently holding:")
-        nftsBought.sort(key=lambda x: x[2], reverse=True)
-        print(tabulate(nftsBought,headers="firstrow",tablefmt="github"))
+        print(nftsBought)
         print("Missing buy transaction:")
-        print(tabulate(nftsOnlySold,headers="firstrow",tablefmt="github"))
+        print(nftsOnlySold)
 
 class NFT:
     buyTransaction = None
