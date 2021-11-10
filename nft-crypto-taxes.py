@@ -28,6 +28,10 @@ class WalletNFTHistory:
                 eventType = openseaEvent['event_type']
 
                 #id of asset
+                if not openseaEvent['asset'] and openseaEvent['asset_bundle']:
+                    print("Bundles from OpenSea are currently not supported. Skipped bundle \"{}\"".format(openseaEvent['asset_bundle']['name'] ))
+                    continue
+
                 asset_id = openseaEvent['asset']['asset_contract']['address'] + '-' + openseaEvent['asset']['token_id']
                 
 
@@ -136,7 +140,7 @@ class WalletNFTHistory:
             elif nft.sellTransaction:
                 nftsOnlySold.add_row(nft.getTableOutput())
                 totalSoldMissingBuy+= nft.sellTransaction.usdPrice
-                hasNftsOnlySold=true
+                hasNftsOnlySold=True
         print(nftsTraded)
 
         print("Profits (USD) {:.2f}".format(profits))
@@ -312,6 +316,7 @@ def main():
         walletNFTHistory.listNFTs()            
     except requests.exceptions.HTTPError as error:
         print(error)
+        print(json.dumps(error.response.json()),indent=4)
     #
 
 
