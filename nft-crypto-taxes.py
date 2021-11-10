@@ -104,21 +104,21 @@ class WalletNFTHistory:
         #NFTs with both buy and sold transaction
         print("NFT profits:")
         #Table setup ref https://pypi.org/project/prettytable/
-        nftsTraded = PrettyTable(["NFT name","Date","Profit USD","% profit","Sell USD","Buy USD"])
+        nftsTraded = PrettyTable(["NFT name","Bought","Days held","Profit USD","% profit","Sell USD","Buy USD"])
         nftsTraded.set_style(DOUBLE_BORDER)
         nftsTraded.float_format=".2"
         nftsTraded.sortby="Sell USD"
         nftsTraded.reversesort=True
         nftsTraded.align = "l"
 
-        nftsBought = PrettyTable(["NFT name","Date","Buy USD","Buy ETH","Break-even ETH"])
+        nftsBought = PrettyTable(["NFT name","Bought","Buy USD","Buy ETH","Break-even ETH"])
         nftsBought.set_style(DOUBLE_BORDER)
         nftsBought.float_format=".2"
         nftsBought.sortby="Buy USD"
         nftsBought.reversesort=True
         nftsBought.align = "l"        
 
-        nftsOnlySold = PrettyTable(["NFT name","Date","Profit","% profit","Sell USD","Buy USD"])
+        nftsOnlySold = PrettyTable(["NFT name","Sold","Profit","% profit","Sell USD","Buy USD"])
         nftsOnlySold.set_style(DOUBLE_BORDER)
         nftsOnlySold.float_format=".2"
         nftsOnlySold.sortby="Sell USD"
@@ -194,7 +194,9 @@ class NFT:
             if self.buyTransaction.usdPrice>0.0:
                 profitPercentage = ((self.sellTransaction.usdPrice-self.buyTransaction.usdPrice)/self.buyTransaction.usdPrice)*100
             
-            return [self.nftName, "{} => {}".format(self.buyTransaction.transactionDate.strftime('%Y-%m-%d'),self.sellTransaction.transactionDate.strftime('%Y-%m-%d')),profitColor +'{:.2f}'.format(self.sellTransaction.usdPrice- self.buyTransaction.usdPrice)+Back.RESET,  profitPercentage,self.sellTransaction.usdPrice,self.buyTransaction.usdPrice]
+            daysHeld =(self.sellTransaction.transactionDate- self.buyTransaction.transactionDate).days
+
+            return [self.nftName,"{}".format(self.buyTransaction.transactionDate.strftime('%Y-%m-%d')),daysHeld,profitColor +'{:.2f}'.format(self.sellTransaction.usdPrice- self.buyTransaction.usdPrice)+Back.RESET,  profitPercentage,self.sellTransaction.usdPrice,self.buyTransaction.usdPrice]
         elif self.buyTransaction:
             #TODO Avoid hardcoding eth price
             ethPriceNow = 4811.89
