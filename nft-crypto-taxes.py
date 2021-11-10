@@ -1,5 +1,5 @@
 
-import requests
+from requests import Request, Session, HTTPError
 import sys
 import json
 from colorama import init, Fore, Back, Style
@@ -273,17 +273,20 @@ def main():
     #print(query)
     try:
         offset=0
+        httpOpenSeaSession = Session()
         while True:
-            query = {   'account_address':wallet, 
-                'event_type':'successful', 
-                #'event_type':'transfer',
-                'only_opensea':False,
-                #'occured_before':'31.12.2021',  #Needs to be unix epoch style
-                #'occured_after':'01.01.2021',
+            query = {   
+                'account_address': wallet, 
+                'event_type': 'successful', 
+                'only_opensea': False,
                 'offset': offset,
-                'limit':300}
-            print(query.items())
-            response = requests.get('https://api.opensea.io/api/v1/events', params=query,headers=headers)
+                'limit': 300}
+
+            httpRequest = Request('GET','https://api.opensea.io/api/v1/events', params=query,headers=headers)
+            httpRequest = httpRequest.prepare()
+            print("REQUEST: {}".format(httpRequest.url))
+            response = httpOpenSeaSession.send(httpRequest)
+
             response.raise_for_status()
 
             openseaEvents = response.json()
@@ -298,13 +301,16 @@ def main():
         offset= 0
         while True:
             query = {   
-                'account_address':wallet, 
-                'event_type':'transfer',
-                'only_opensea':False,
+                'account_address': wallet, 
+                'event_type': 'transfer',
+                'only_opensea': False,
                 'offset': offset,
-                'limit':300}
-            print(query.items())
-            response = requests.get('https://api.opensea.io/api/v1/events', params=query,headers=headers)
+                'limit': 300}
+            httpRequest = Request('GET','https://api.opensea.io/api/v1/events', params=query,headers=headers)
+            httpRequest = httpRequest.prepare()
+            print("REQUEST: {}".format(httpRequest.url))
+            response = httpOpenSeaSession.send(httpRequest)
+
             response.raise_for_status()
 
             openseaEvents = response.json()
@@ -318,7 +324,7 @@ def main():
             offset+=300            
 
         walletNFTHistory.listNFTs()            
-    except requests.exceptions.HTTPError as error:
+    except HTTPError as error:
         print(error)
         print(json.dumps(error.response.json()),indent=4)
     #
