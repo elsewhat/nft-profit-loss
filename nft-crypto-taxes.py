@@ -213,13 +213,31 @@ def main():
                 'Accepts':'application/json'}      
     #print(query)
     try:
-        response = requests.get('https://api.opensea.io/api/v1/events', params=query,headers=headers)
-        response.raise_for_status()
+        offset=0
+        while True:
+            query = {   'account_address':wallet, 
+                'event_type':'successful', 
+                #'event_type':'transfer',
+                'only_opensea':False,
+                #'occured_before':'31.12.2021',  #Needs to be unix epoch style
+                #'occured_after':'01.01.2021',
+                'offset': offset,
+                'limit':300}
+            print(query.items())
+            response = requests.get('https://api.opensea.io/api/v1/events', params=query,headers=headers)
+            response.raise_for_status()
 
-        openseaEvents = response.json()
-        walletNFTHistory.processOpenseaAPIResponse(openseaEvents)
-        walletNFTHistory.listNFTs()
-        # Additional code will only run if the request is successful
+            openseaEvents = response.json()
+            if not openseaEvents['asset_events']:
+                #No events returned from Opensea API
+                break
+            else:
+                walletNFTHistory.processOpenseaAPIResponse(openseaEvents)
+            
+            # Additional code will only run if the request is successful
+            offset+=300
+
+        walletNFTHistory.listNFTs()            
     except requests.exceptions.HTTPError as error:
         print(error)
     #
