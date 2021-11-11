@@ -82,14 +82,21 @@ class WalletNFTHistory:
                 if transaction.isSeller(self.wallet):
                     # Only apply transfer event if there is no 'successful' (ie. purchase) event
                     if eventType =='successful':
+                        if nft.sellTransaction:
+                            print("Overwriting existing sell transaction")
+                            print(json.dumps(openseaEvent,indent=4)) 
                         nft.sellTransaction = transaction
                     elif eventType =='transfer' and not nft.sellTransaction:
-                        nft.sellTransaction = transaction 
+                        nft.sellTransaction = transaction                        
                 else:
                     if eventType =='successful':
+                        if nft.buyTransaction:
+                            print("Overwriting existing sell transaction")
+                            print(json.dumps(openseaEvent,indent=4)) 
                         nft.buyTransaction = transaction
+                        
                     elif eventType =='transfer' and not nft.buyTransaction:
-                        nft.buyTransaction = transaction
+                        nft.buyTransaction = transaction                    
                 
                 self.nfts[asset_id]= nft
             except BaseException as ex:
