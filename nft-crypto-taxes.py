@@ -58,13 +58,13 @@ class WalletNFTHistory:
                 
 
                 if eventType=='successful':
-                    transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],transactionDate,priceInWei,openseaEvent['quantity'], paymentToken, usdPrice, walletSeller, openseaEvent['winner_account']['address'])
+                    transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],transactionDate,eventType,priceInWei,openseaEvent['quantity'], paymentToken, usdPrice, walletSeller, openseaEvent['winner_account']['address'])
                 elif eventType=='transfer':
                     if openseaEvent['transaction']:
                         transactionHash = openseaEvent['transaction']['transaction_hash']
                     else:#Some older transer events have transaction: null
                         transactionHash = openseaEvent['created_date']
-                    transaction  = Transaction(transactionHash,transactionDate,priceInWei,openseaEvent['quantity'], paymentToken, usdPrice, openseaEvent['from_account']['address'], openseaEvent['to_account']['address'])
+                    transaction  = Transaction(transactionHash,transactionDate,eventType,priceInWei,openseaEvent['quantity'], paymentToken, usdPrice, openseaEvent['from_account']['address'], openseaEvent['to_account']['address'])
                 #print(transaction)
 
                 # Create new NFT or add transaction to existing NFT
@@ -176,7 +176,7 @@ class NFT:
             return '{}\t\t{:.2f}\t'.format(self.nftName,self.sellTransaction.usdPrice)
 
     def getProfits(self):
-        if self.buyTransaction and self.sellTransaction:
+        if self.buyTransaction and self.sellTransaction and self.sellTransaction.transactionType != 'transfer':
             return self.sellTransaction.usdPrice- self.buyTransaction.usdPrice
         else:
             return 0.0
@@ -184,19 +184,19 @@ class NFT:
     def getTableOutput(self):
         if self.buyTransaction and self.sellTransaction:
             profitColor = Back.GREEN
-            if self.sellTransaction.usdPrice< self.buyTransaction.usdPrice:
+            if self.getProfits()<0:
                 profitColor = Back.RED
-            elif self.sellTransaction.usdPrice== self.buyTransaction.usdPrice:
-                profitColor = Back.WHITE
+            elif self.getProfits()==0:
+                profitColor = ''
 
-            profitPercentage=100.0
+            profitPercentage=0.0
             #Avoid divide by zero in rare cases
             if self.buyTransaction.usdPrice>0.0:
-                profitPercentage = ((self.sellTransaction.usdPrice-self.buyTransaction.usdPrice)/self.buyTransaction.usdPrice)*100
+                profitPercentage = ((self.getProfits())/self.buyTransaction.usdPrice)*100
             
             daysHeld =(self.sellTransaction.transactionDate- self.buyTransaction.transactionDate).days
 
-            return [self.nftName,"{}".format(self.buyTransaction.transactionDate.strftime('%Y-%m-%d')),daysHeld,profitColor +'{:.2f}'.format(self.sellTransaction.usdPrice- self.buyTransaction.usdPrice)+Back.RESET,  profitPercentage,self.sellTransaction.usdPrice,self.buyTransaction.usdPrice]
+            return [self.nftName,"{}".format(self.buyTransaction.transactionDate.strftime('%Y-%m-%d')),daysHeld,profitColor +'{:.2f}'.format(self.getProfits())+Back.RESET,  profitPercentage,self.sellTransaction.usdPrice,self.buyTransaction.usdPrice]
         elif self.buyTransaction:
             #TODO Avoid hardcoding eth price
             ethPriceNow = 4811.89
@@ -209,9 +209,10 @@ class NFT:
             return [self.nftName,"{}".format(self.sellTransaction.transactionDate.strftime('%Y-%m-%d')), '', '',self.sellTransaction.usdPrice,'']   
 
 class Transaction:
-    def __init__(self, transactionHash,transactionDate, price,quantity,paymentToken, usdPrice, walletSeller, walletBuyer):
+    def __init__(self, transactionHash,transactionDate,transactionType, price,quantity,paymentToken, usdPrice, walletSeller, walletBuyer):
         self.transactionHash=transactionHash
         self.transactionDate=transactionDate
+        self.transactionType=transactionType
         self.price = price
         self.quantity = quantity
         self.paymentToken=paymentToken
@@ -291,8 +292,11 @@ def main():
 
             openseaEvents = response.json()
             if not openseaEvents['asset_events']:
-                #No events returned from Opensea API
+                #No events returned from Opensea API indicating no more pages
                 break
+            elif offset+300 > 10000:
+                print("WARNING: OpenSea API does not currently support more than 10 000 events. Skipping remaining ones")
+                break            
             else:
                 walletNFTHistory.processOpenseaAPIResponse(openseaEvents)
             
@@ -315,7 +319,10 @@ def main():
 
             openseaEvents = response.json()
             if not openseaEvents['asset_events']:
-                #No events returned from Opensea API
+                #No events returned from Opensea API indicating no more pages
+                break
+            elif offset+300 > 10000:
+                print("WARNING: OpenSea API does not currently support more than 10 000 events. Skipping remaining ones")
                 break
             else:
                 walletNFTHistory.processOpenseaAPIResponse(openseaEvents)
