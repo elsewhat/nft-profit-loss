@@ -10,6 +10,9 @@ class WalletNFTHistory:
     wallet = None
     nfts = {}
     historicEthPrice={}
+    REPORT_PROFIT=1
+    REPORT_HOLDING=2
+    REPORT_ONLY_SOLD=3
 
     def __init__(self, wallet,historicEthPrice):
         self.wallet = wallet
@@ -110,12 +113,12 @@ class WalletNFTHistory:
         nftsTraded.reversesort=True
         nftsTraded.align = "l"
 
-        nftsBought = PrettyTable(["NFT name","Bought","Days held","Buy USD","Buy ETH","Break-even ETH"])
-        nftsBought.set_style(DOUBLE_BORDER)
-        nftsBought.float_format=".2"
-        nftsBought.sortby="Buy USD"
-        nftsBought.reversesort=True
-        nftsBought.align = "l"        
+        nftsHolding = PrettyTable(["NFT name","Bought","Days held","Buy USD","Buy ETH","Break-even ETH"])
+        nftsHolding.set_style(DOUBLE_BORDER)
+        nftsHolding.float_format=".2"
+        nftsHolding.sortby="Buy USD"
+        nftsHolding.reversesort=True
+        nftsHolding.align = "l"        
 
         nftsOnlySold = PrettyTable(["NFT name","Sold","Profit","% profit","Sell USD","Buy USD"])
         nftsOnlySold.set_style(DOUBLE_BORDER)
@@ -130,32 +133,26 @@ class WalletNFTHistory:
         hasNftsOnlySold=False
         for nftKey in self.nfts:
             nft = self.nfts[nftKey]
-            if nft.buyTransaction and nft.sellTransaction:
-                nftsTraded.add_row(nft.getTableOutput())
-                profits += nft.getProfits()
-            elif nft.buyTransaction:
-                nftsBought.add_row(nft.getTableOutput())
-                totalBuyForUnsold+= nft.buyTransaction.usdPrice
-            elif nft.sellTransaction:
-                nftsOnlySold.add_row(nft.getTableOutput())
-                totalSoldMissingBuy+= nft.sellTransaction.usdPrice
-                hasNftsOnlySold=True
+            nft.addToReport(nftsTraded,self.REPORT_PROFIT)
+            nft.addToReport(nftsHolding,self.REPORT_HOLDING)
+            nft.addToReport(nftsOnlySold,self.REPORT_ONLY_SOLD)
+
         print(nftsTraded)
 
-        print("Profits (USD) {:.2f}".format(profits))
+        #print("Profits (USD) {:.2f}".format(profits))
         
         print("Currently holding:")
-        print(nftsBought)
-        print("Total buy price for unsold nfts {:.2f}".format(totalBuyForUnsold))
+        print(nftsHolding)
+        #print("Total buy price for unsold nfts {:.2f}".format(totalBuyForUnsold))
 
         if hasNftsOnlySold:
             print("Missing buy transaction:")
-            print("Total sell price where missing buy transaction {:.2f} USD".format(totalSoldMissingBuy))
+            #print("Total sell price where missing buy transaction {:.2f} USD".format(totalSoldMissingBuy))
             print(nftsOnlySold)
 
 class NFT:
-    buyTransaction = None
-    sellTransaction = None
+    __buyTransaction = None
+    __sellTransaction = None
 
 
     def __init__(self, contractAddress,nftName,nftDescription,contractTokenId,openseaLink,imageUrl,imagePreviewUrl):
@@ -168,33 +165,47 @@ class NFT:
         self.imagePreviewUrl = imagePreviewUrl
 
     def __str__(self):
-        if self.buyTransaction and self.sellTransaction:
-            return '{}\t{:.2f}\t{:.2f}\t{:.2f}'.format(self.nftName , self.sellTransaction.usdPrice- self.buyTransaction.usdPrice, self.sellTransaction.usdPrice,self.buyTransaction.usdPrice)
-        elif self.buyTransaction:
-            return '{}\t\t\t{:.2f}'.format(self.nftName,self.buyTransaction.usdPrice)
-        elif self.sellTransaction:
-            return '{}\t\t{:.2f}\t'.format(self.nftName,self.sellTransaction.usdPrice)
+        if self.__buyTransaction and self.__sellTransaction:
+            return '{}\t{:.2f}\t{:.2f}\t{:.2f}'.format(self.nftName , self.__sellTransaction.usdPrice- self.__buyTransaction.usdPrice, self.__sellTransaction.usdPrice,self.__buyTransaction.usdPrice)
+        elif self.__buyTransaction:
+            return '{}\t\t\t{:.2f}'.format(self.nftName,self.__buyTransaction.usdPrice)
+        elif self.__sellTransaction:
+            return '{}\t\t{:.2f}\t'.format(self.nftName,self.__sellTransaction.usdPrice)
 
     def getProfits(self):
-        if self.buyTransaction and self.sellTransaction and self.sellTransaction.transactionType != 'transfer':
-            return self.sellTransaction.usdPrice- self.buyTransaction.usdPrice
+        if self.__buyTransaction and self.__sellTransaction and self.__sellTransaction.transactionType != 'transfer':
+            return self.__sellTransaction.usdPrice- self.__buyTransaction.usdPrice
         else:
             return 0.0
 
     def addBuyTransaction(self, transaction, isTransferEvent):
         if isTransferEvent==False:
-            self.buyTransaction = transaction   
-        elif isTransferEvent==True and not self.buyTransaction:
-            self.buyTransaction = transaction   
+            self.__buyTransaction = transaction   
+        elif isTransferEvent==True and not self.__buyTransaction:
+            self.__buyTransaction = transaction   
     
     def addSellTransaction(self, transaction, isTransferEvent):
         if isTransferEvent==False:
-            self.sellTransaction = transaction
-        elif isTransferEvent==True and not self.sellTransaction:
-            self.sellTransaction = transaction
+            self.__sellTransaction = transaction
+        elif isTransferEvent==True and not self.__sellTransaction:
+            self.__sellTransaction = transaction
+
+
+    def addToReport(self,prettyTableForReport, reportType):
+        if reportType == WalletNFTHistory.REPORT_PROFIT:
+            if self.__buyTransaction and self.__sellTransaction:    
+                prettyTableForReport.add_row(self.getTableOutput())
+        elif reportType == WalletNFTHistory.REPORT_HOLDING:
+            if self.__buyTransaction and not self.__sellTransaction:
+                prettyTableForReport.add_row(self.getTableOutput())
+        elif reportType == WalletNFTHistory.REPORT_ONLY_SOLD:      
+            if self.__sellTransaction and not self.__buyTransaction :
+               prettyTableForReport.add_row(self.getTableOutput()) 
+        else:
+            print("Unsupported report type {}".format(reportType))      
 
     def getTableOutput(self):
-        if self.buyTransaction and self.sellTransaction:
+        if self.__buyTransaction and self.__sellTransaction:
             profitColor = Back.GREEN
             if self.getProfits()<0:
                 profitColor = Back.RED
@@ -203,22 +214,22 @@ class NFT:
 
             profitPercentage=0.0
             #Avoid divide by zero in rare cases
-            if self.buyTransaction.usdPrice>0.0:
-                profitPercentage = ((self.getProfits())/self.buyTransaction.usdPrice)*100
+            if self.__buyTransaction.usdPrice>0.0:
+                profitPercentage = ((self.getProfits())/self.__buyTransaction.usdPrice)*100
             
-            daysHeld =(self.sellTransaction.transactionDate- self.buyTransaction.transactionDate).days
+            daysHeld =(self.__sellTransaction.transactionDate- self.__buyTransaction.transactionDate).days
 
-            return [self.nftName,"{}".format(self.buyTransaction.transactionDate.strftime('%Y-%m-%d')),daysHeld,profitColor +'{:.2f}'.format(self.getProfits())+Back.RESET,  profitPercentage,self.sellTransaction.usdPrice,self.buyTransaction.usdPrice]
-        elif self.buyTransaction:
+            return [self.nftName,"{}".format(self.__buyTransaction.transactionDate.strftime('%Y-%m-%d')),daysHeld,profitColor +'{:.2f}'.format(self.getProfits())+Back.RESET,  profitPercentage,self.__sellTransaction.usdPrice,self.__buyTransaction.usdPrice]
+        elif self.__buyTransaction:
             #TODO Avoid hardcoding eth price
             ethPriceNow = 4811.89
-            breakEven = self.buyTransaction.usdPrice/ethPriceNow
+            breakEven = self.__buyTransaction.usdPrice/ethPriceNow
 
-            daysHeld =(datetime.now()- self.buyTransaction.transactionDate).days
+            daysHeld =(datetime.now()- self.__buyTransaction.transactionDate).days
 
-            return [self.nftName,"{}".format(self.buyTransaction.transactionDate.strftime('%Y-%m-%d')),daysHeld,self.buyTransaction.usdPrice, self.buyTransaction.price*1.0e-18, breakEven]
-        elif self.sellTransaction:
-            return [self.nftName,"{}".format(self.sellTransaction.transactionDate.strftime('%Y-%m-%d')), '', '',self.sellTransaction.usdPrice,'']   
+            return [self.nftName,"{}".format(self.__buyTransaction.transactionDate.strftime('%Y-%m-%d')),daysHeld,self.__buyTransaction.usdPrice, self.__buyTransaction.price*1.0e-18, breakEven]
+        elif self.____sellTransaction:
+            return [self.nftName,"{}".format(self.____sellTransaction.transactionDate.strftime('%Y-%m-%d')), '', '',self.____sellTransaction.usdPrice,'']   
 
 class Transaction:
     def __init__(self, transactionHash,transactionDate,transactionType, price,quantity,paymentToken, usdPrice, walletSeller, walletBuyer):
