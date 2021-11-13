@@ -250,19 +250,20 @@ class NFT:
             totalBuyUSD=0.0
             countSold = 0
             daysHeld=0
+            dateFirstBought=datetime.now()
             #Sum together for multiple sales
             for walletTransaction in self.__walletTransactions: 
                 buyTransaction,sellTransaction = walletTransaction
+                countSold+=1
+                if buyTransaction.transactionDate< dateFirstBought:
+                    dateFirstBought=buyTransaction.transactionDate
+                daysHeld =(sellTransaction.transactionDate- buyTransaction.transactionDate).days
                 if buyTransaction and sellTransaction and sellTransaction.transactionType != 'transfer':
                     totalBuyUSD += buyTransaction.usdPrice
                     totalSellUSD += sellTransaction.usdPrice
-                    countSold+=1
-                    if daysHeld ==0:
-                        daysHeld =(sellTransaction.transactionDate- buyTransaction.transactionDate).days
-                    else:
-                        #Quasi average
-                        daysHeld = ((sellTransaction.transactionDate- buyTransaction.transactionDate).days + daysHeld)/2
+                    
 
+            daysHeld= int(daysHeld/countSold)
             profitPercentage=0.0
             #Avoid divide by zero in rare cases
             if totalBuyUSD >0.0:
@@ -270,18 +271,39 @@ class NFT:
 
             nftName = self.nftName
             if countSold >1:
-                nftName += 'x{}'.format(countSold)
+                nftName += ' x {}'.format(countSold)
 
-            return [nftName,"{}".format(buyTransaction.transactionDate.strftime('%Y-%m-%d')),daysHeld,profitColor +'{:.2f}'.format(profits)+Back.RESET,  profitPercentage,totalSellUSD,totalBuyUSD]
+            return [nftName,"{}".format(dateFirstBought.strftime('%Y-%m-%d')),daysHeld,profitColor +'{:.2f}'.format(profits)+Back.RESET,  profitPercentage,totalSellUSD,totalBuyUSD]
         elif buyTransaction:
             #TODO Avoid hardcoding eth price
             ethPriceNow = 4811.89
-            breakEven = buyTransaction.usdPrice/ethPriceNow
+            totalBuyUSD=0.0
+            totalBuyETH=0.0
+            countHolding = 0
+            daysHeld=0
+            dateFirstBought=datetime.now()
+            #Sum together for multiple sales
+            for walletTransaction in self.__walletTransactions: 
+                buyTransaction,_ = walletTransaction
+                if buyTransaction.transactionDate< dateFirstBought:
+                    dateFirstBought=buyTransaction.transactionDate              
+                if buyTransaction:
+                    totalBuyUSD += buyTransaction.usdPrice
+                    totalBuyETH += buyTransaction.price*1.0e-18
+                    countHolding+=1
+                    daysHeld +=(datetime.now()- buyTransaction.transactionDate).days
 
-            daysHeld =(datetime.now()- buyTransaction.transactionDate).days
+            daysHeld= int(daysHeld/countHolding)
+            breakEven = totalBuyUSD/ethPriceNow
+            avgBuyEth = totalBuyETH/countHolding
 
-            return [self.nftName,"{}".format(buyTransaction.transactionDate.strftime('%Y-%m-%d')),daysHeld,buyTransaction.usdPrice, buyTransaction.price*1.0e-18, breakEven]
+            nftName = self.nftName
+            if countHolding >1:
+                nftName += ' x {}'.format(countHolding)
+
+            return [nftName,"{}".format(dateFirstBought.strftime('%Y-%m-%d')),daysHeld,totalBuyUSD, avgBuyEth, breakEven]
         elif sellTransaction:
+            #Does not handle multiple of the same nft held , but that's ok
             return [self.nftName,"{}".format(sellTransaction.transactionDate.strftime('%Y-%m-%d')), '', '',sellTransaction.usdPrice,'']   
 
 class Transaction:
