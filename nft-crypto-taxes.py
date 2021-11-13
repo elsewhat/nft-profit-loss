@@ -1,6 +1,7 @@
 
 from requests import Request, Session, HTTPError
 import sys
+import copy
 import json
 from colorama import init, Fore, Back, Style
 from datetime import datetime
@@ -10,6 +11,9 @@ class WalletNFTHistory:
     wallet = None
     nfts = {}
     historicEthPrice={}
+    REPORT_PROFIT=1
+    REPORT_HOLDING=2
+    REPORT_ONLY_SOLD=3
 
     def __init__(self, wallet,historicEthPrice):
         self.wallet = wallet
@@ -56,15 +60,19 @@ class WalletNFTHistory:
                 if walletSeller is not None:
                     walletSeller = walletSeller['address']
                 
-
+                isTransferEvent = False
                 if eventType=='successful':
                     transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],transactionDate,eventType,priceInWei,openseaEvent['quantity'], paymentToken, usdPrice, walletSeller, openseaEvent['winner_account']['address'])
                 elif eventType=='transfer':
+                    isTransferEvent=True
                     if openseaEvent['transaction']:
                         transactionHash = openseaEvent['transaction']['transaction_hash']
                     else:#Some older transer events have transaction: null
                         transactionHash = openseaEvent['created_date']
                     transaction  = Transaction(transactionHash,transactionDate,eventType,priceInWei,openseaEvent['quantity'], paymentToken, usdPrice, openseaEvent['from_account']['address'], openseaEvent['to_account']['address'])
+                else:
+                    print("Unsupported event {}".format(eventType))
+                    raise
                 #print(transaction)
 
                 # Create new NFT or add transaction to existing NFT
@@ -78,18 +86,13 @@ class WalletNFTHistory:
                 else:
                     #print('Add transaction to existing NFT')
                     nft = self.nfts.get(asset_id)
-                    
+                
+
                 if transaction.isSeller(self.wallet):
-                    # Only apply transfer event if there is no 'successful' (ie. purchase) event
-                    if eventType =='successful':
-                        nft.sellTransaction = transaction
-                    elif eventType =='transfer' and not nft.sellTransaction:
-                        nft.sellTransaction = transaction 
+                    nft.addSellTransaction(copy.copy(transaction),isTransferEvent)                  
                 else:
-                    if eventType =='successful':
-                        nft.buyTransaction = transaction
-                    elif eventType =='transfer' and not nft.buyTransaction:
-                        nft.buyTransaction = transaction
+                    nft.addBuyTransaction(copy.copy(transaction),isTransferEvent)   
+                 
                 
                 self.nfts[asset_id]= nft
             except BaseException as ex:
@@ -111,12 +114,12 @@ class WalletNFTHistory:
         nftsTraded.reversesort=True
         nftsTraded.align = "l"
 
-        nftsBought = PrettyTable(["NFT name","Bought","Days held","Buy USD","Buy ETH","Break-even ETH"])
-        nftsBought.set_style(DOUBLE_BORDER)
-        nftsBought.float_format=".2"
-        nftsBought.sortby="Buy USD"
-        nftsBought.reversesort=True
-        nftsBought.align = "l"        
+        nftsHolding = PrettyTable(["NFT name","Bought","Days held","Buy USD","Buy ETH","Break-even ETH"])
+        nftsHolding.set_style(DOUBLE_BORDER)
+        nftsHolding.float_format=".2"
+        nftsHolding.sortby="Buy USD"
+        nftsHolding.reversesort=True
+        nftsHolding.align = "l"        
 
         nftsOnlySold = PrettyTable(["NFT name","Sold","Profit","% profit","Sell USD","Buy USD"])
         nftsOnlySold.set_style(DOUBLE_BORDER)
@@ -131,33 +134,24 @@ class WalletNFTHistory:
         hasNftsOnlySold=False
         for nftKey in self.nfts:
             nft = self.nfts[nftKey]
-            if nft.buyTransaction and nft.sellTransaction:
-                nftsTraded.add_row(nft.getTableOutput())
-                profits += nft.getProfits()
-            elif nft.buyTransaction:
-                nftsBought.add_row(nft.getTableOutput())
-                totalBuyForUnsold+= nft.buyTransaction.usdPrice
-            elif nft.sellTransaction:
-                nftsOnlySold.add_row(nft.getTableOutput())
-                totalSoldMissingBuy+= nft.sellTransaction.usdPrice
-                hasNftsOnlySold=True
+            nft.addToReport(nftsTraded,self.REPORT_PROFIT)
+            nft.addToReport(nftsHolding,self.REPORT_HOLDING)
+            nft.addToReport(nftsOnlySold,self.REPORT_ONLY_SOLD)
+
         print(nftsTraded)
 
-        print("Profits (USD) {:.2f}".format(profits))
+        #print("Profits (USD) {:.2f}".format(profits))
         
         print("Currently holding:")
-        print(nftsBought)
-        print("Total buy price for unsold nfts {:.2f}".format(totalBuyForUnsold))
+        print(nftsHolding)
+        #print("Total buy price for unsold nfts {:.2f}".format(totalBuyForUnsold))
 
         if hasNftsOnlySold:
             print("Missing buy transaction:")
-            print("Total sell price where missing buy transaction {:.2f} USD".format(totalSoldMissingBuy))
+            #print("Total sell price where missing buy transaction {:.2f} USD".format(totalSoldMissingBuy))
             print(nftsOnlySold)
 
 class NFT:
-    buyTransaction = None
-    sellTransaction = None
-
     def __init__(self, contractAddress,nftName,nftDescription,contractTokenId,openseaLink,imageUrl,imagePreviewUrl):
         self.contractAddress = contractAddress
         self.nftName = nftName
@@ -166,47 +160,151 @@ class NFT:
         self.openseaLink = openseaLink
         self.imageUrl = imageUrl
         self.imagePreviewUrl = imagePreviewUrl
+        #Array of tuples of (buyTransaction, sellTransaction)
+        self.__walletTransactions=[(None,None)]
 
     def __str__(self):
-        if self.buyTransaction and self.sellTransaction:
-            return '{}\t{:.2f}\t{:.2f}\t{:.2f}'.format(self.nftName , self.sellTransaction.usdPrice- self.buyTransaction.usdPrice, self.sellTransaction.usdPrice,self.buyTransaction.usdPrice)
-        elif self.buyTransaction:
-            return '{}\t\t\t{:.2f}'.format(self.nftName,self.buyTransaction.usdPrice)
-        elif self.sellTransaction:
-            return '{}\t\t{:.2f}\t'.format(self.nftName,self.sellTransaction.usdPrice)
+        buyTransaction,sellTransaction = self.__walletTransactions[0]
+
+        if buyTransaction and sellTransaction:
+            return '{}\t{:.2f}\t{:.2f}\t{:.2f}'.format(self.nftName , sellTransaction.usdPrice- buyTransaction.usdPrice, sellTransaction.usdPrice,buyTransaction.usdPrice)
+        elif buyTransaction:
+            return '{}\t\t\t{:.2f}'.format(self.nftName,buyTransaction.usdPrice)
+        elif sellTransaction:
+            return '{}\t\t{:.2f}\t'.format(self.nftName,sellTransaction.usdPrice)
 
     def getProfits(self):
-        if self.buyTransaction and self.sellTransaction and self.sellTransaction.transactionType != 'transfer':
-            return self.sellTransaction.usdPrice- self.buyTransaction.usdPrice
+        profits = 0.0
+        for walletTransaction in self.__walletTransactions: 
+            buyTransaction,sellTransaction = walletTransaction
+
+            # Only add to profits if both buy and sell transaction have a usdPrice
+            if buyTransaction and sellTransaction and sellTransaction.transactionType != 'transfer':
+                profits+= sellTransaction.usdPrice- buyTransaction.usdPrice
+
+        return profits
+ 
+    def addBuyTransaction(self, transaction, isTransferEvent):
+        existingBuyTransaction,existingSellTransaction = self.__walletTransactions[0]
+
+        if not isTransferEvent:
+            for index, walletTransaction in enumerate(self.__walletTransactions):
+                #print("Creating new buy transaction for {}".format(self.nftName))
+                currentBuyTransaction,currentSellTransaction = walletTransaction
+                if currentBuyTransaction == None:
+                    if index > 0:
+                        print("Adding additional buy for {}".format(self.nftName))
+                    self.__walletTransactions[index]=(transaction,currentSellTransaction)
+                    return
+        elif isTransferEvent==True and not existingBuyTransaction:
+            #self.__buyTransaction = transaction   
+            self.__walletTransactions[0] = (transaction,existingSellTransaction)
+    
+    def addSellTransaction(self, transaction, isTransferEvent):
+        existingBuyTransaction,existingSellTransaction = self.__walletTransactions[0]
+
+        #Check if we've owned this NFT more than once
+        # if last entry in __walletTransactions already has a sellTransaction, add a new entry
+        if not isTransferEvent:
+            _,lastSellTransaction = self.__walletTransactions[len(self.__walletTransactions)-1]
+            if lastSellTransaction!= None:
+                print("Creating new sell transaction for {}".format(self.nftName))
+                self.__walletTransactions.append((None,transaction))
+                return       
+
+        if isTransferEvent==False:
+            #self.__sellTransaction = transaction
+            self.__walletTransactions[0] = (existingBuyTransaction,transaction)
+        elif isTransferEvent==True and not existingSellTransaction:
+            #self.__sellTransaction = transaction
+            self.__walletTransactions[0] = (existingBuyTransaction,transaction)
+
+
+    def addToReport(self,prettyTableForReport, reportType):
+        buyTransaction,sellTransaction = self.__walletTransactions[0]
+
+        if reportType == WalletNFTHistory.REPORT_PROFIT:
+            if buyTransaction and sellTransaction:    
+                prettyTableForReport.add_row(self.getTableOutput())
+        elif reportType == WalletNFTHistory.REPORT_HOLDING:
+            if buyTransaction and not sellTransaction:
+                prettyTableForReport.add_row(self.getTableOutput())
+        elif reportType == WalletNFTHistory.REPORT_ONLY_SOLD:      
+            if sellTransaction and not buyTransaction:
+               prettyTableForReport.add_row(self.getTableOutput()) 
         else:
-            return 0.0
+            print("Unsupported report type {}".format(reportType))      
 
     def getTableOutput(self):
-        if self.buyTransaction and self.sellTransaction:
+        buyTransaction,sellTransaction = self.__walletTransactions[0]
+
+        if buyTransaction and sellTransaction:
             profitColor = Back.GREEN
-            if self.getProfits()<0:
+            profits = self.getProfits()
+            if profits<0:
                 profitColor = Back.RED
-            elif self.getProfits()==0:
+            elif profits==0:
                 profitColor = ''
 
+            totalSellUSD=0.0
+            totalBuyUSD=0.0
+            countSold = 0
+            daysHeld=0
+            dateFirstBought=datetime.now()
+            #Sum together for multiple sales
+            for walletTransaction in self.__walletTransactions: 
+                buyTransaction,sellTransaction = walletTransaction
+                countSold+=1
+                if buyTransaction.transactionDate< dateFirstBought:
+                    dateFirstBought=buyTransaction.transactionDate
+                daysHeld =(sellTransaction.transactionDate- buyTransaction.transactionDate).days
+                if buyTransaction and sellTransaction and sellTransaction.transactionType != 'transfer':
+                    totalBuyUSD += buyTransaction.usdPrice
+                    totalSellUSD += sellTransaction.usdPrice
+                    
+
+            daysHeld= int(daysHeld/countSold)
             profitPercentage=0.0
             #Avoid divide by zero in rare cases
-            if self.buyTransaction.usdPrice>0.0:
-                profitPercentage = ((self.getProfits())/self.buyTransaction.usdPrice)*100
-            
-            daysHeld =(self.sellTransaction.transactionDate- self.buyTransaction.transactionDate).days
+            if totalBuyUSD >0.0:
+                profitPercentage = ((profits)/totalBuyUSD)*100
 
-            return [self.nftName,"{}".format(self.buyTransaction.transactionDate.strftime('%Y-%m-%d')),daysHeld,profitColor +'{:.2f}'.format(self.getProfits())+Back.RESET,  profitPercentage,self.sellTransaction.usdPrice,self.buyTransaction.usdPrice]
-        elif self.buyTransaction:
+            nftName = self.nftName
+            if countSold >1:
+                nftName += ' x {}'.format(countSold)
+
+            return [nftName,"{}".format(dateFirstBought.strftime('%Y-%m-%d')),daysHeld,profitColor +'{:.2f}'.format(profits)+Back.RESET,  profitPercentage,totalSellUSD,totalBuyUSD]
+        elif buyTransaction:
             #TODO Avoid hardcoding eth price
             ethPriceNow = 4811.89
-            breakEven = self.buyTransaction.usdPrice/ethPriceNow
+            totalBuyUSD=0.0
+            totalBuyETH=0.0
+            countHolding = 0
+            daysHeld=0
+            dateFirstBought=datetime.now()
+            #Sum together for multiple sales
+            for walletTransaction in self.__walletTransactions: 
+                buyTransaction,_ = walletTransaction
+                if buyTransaction.transactionDate< dateFirstBought:
+                    dateFirstBought=buyTransaction.transactionDate              
+                if buyTransaction:
+                    totalBuyUSD += buyTransaction.usdPrice
+                    totalBuyETH += buyTransaction.price*1.0e-18
+                    countHolding+=1
+                    daysHeld +=(datetime.now()- buyTransaction.transactionDate).days
 
-            daysHeld =(datetime.now()- self.buyTransaction.transactionDate).days
+            daysHeld= int(daysHeld/countHolding)
+            breakEven = totalBuyUSD/ethPriceNow
+            avgBuyEth = totalBuyETH/countHolding
 
-            return [self.nftName,"{}".format(self.buyTransaction.transactionDate.strftime('%Y-%m-%d')),daysHeld,self.buyTransaction.usdPrice, self.buyTransaction.price*1.0e-18, breakEven]
-        elif self.sellTransaction:
-            return [self.nftName,"{}".format(self.sellTransaction.transactionDate.strftime('%Y-%m-%d')), '', '',self.sellTransaction.usdPrice,'']   
+            nftName = self.nftName
+            if countHolding >1:
+                nftName += ' x {}'.format(countHolding)
+
+            return [nftName,"{}".format(dateFirstBought.strftime('%Y-%m-%d')),daysHeld,totalBuyUSD, avgBuyEth, breakEven]
+        elif sellTransaction:
+            #Does not handle multiple of the same nft held , but that's ok
+            return [self.nftName,"{}".format(sellTransaction.transactionDate.strftime('%Y-%m-%d')), '', '',sellTransaction.usdPrice,'']   
 
 class Transaction:
     def __init__(self, transactionHash,transactionDate,transactionType, price,quantity,paymentToken, usdPrice, walletSeller, walletBuyer):
