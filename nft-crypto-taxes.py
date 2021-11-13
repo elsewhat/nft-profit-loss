@@ -134,9 +134,9 @@ class WalletNFTHistory:
         hasNftsOnlySold=False
         for nftKey in self.nfts:
             nft = self.nfts[nftKey]
-            nft.addToReport(nftsTraded,self.REPORT_PROFIT)
-            nft.addToReport(nftsHolding,self.REPORT_HOLDING)
-            nft.addToReport(nftsOnlySold,self.REPORT_ONLY_SOLD)
+            nft.addToReport(nftsTraded,self.REPORT_PROFIT,self.historicEthPrice)
+            nft.addToReport(nftsHolding,self.REPORT_HOLDING,self.historicEthPrice)
+            nft.addToReport(nftsOnlySold,self.REPORT_ONLY_SOLD,self.historicEthPrice)
 
         print(nftsTraded)
 
@@ -220,22 +220,22 @@ class NFT:
             self.__walletTransactions[0] = (existingBuyTransaction,transaction)
 
 
-    def addToReport(self,prettyTableForReport, reportType):
+    def addToReport(self,prettyTableForReport, reportType,historicEthPrice):
         buyTransaction,sellTransaction = self.__walletTransactions[0]
 
         if reportType == WalletNFTHistory.REPORT_PROFIT:
             if buyTransaction and sellTransaction:    
-                prettyTableForReport.add_row(self.getTableOutput())
+                prettyTableForReport.add_row(self.getTableOutput(historicEthPrice))
         elif reportType == WalletNFTHistory.REPORT_HOLDING:
             if buyTransaction and not sellTransaction:
-                prettyTableForReport.add_row(self.getTableOutput())
+                prettyTableForReport.add_row(self.getTableOutput(historicEthPrice))
         elif reportType == WalletNFTHistory.REPORT_ONLY_SOLD:      
             if sellTransaction and not buyTransaction:
-               prettyTableForReport.add_row(self.getTableOutput()) 
+               prettyTableForReport.add_row(self.getTableOutput(historicEthPrice)) 
         else:
             print("Unsupported report type {}".format(reportType))      
 
-    def getTableOutput(self):
+    def getTableOutput(self,historicEthPrice):
         buyTransaction,sellTransaction = self.__walletTransactions[0]
 
         if buyTransaction and sellTransaction:
@@ -275,8 +275,8 @@ class NFT:
 
             return [nftName,"{}".format(dateFirstBought.strftime('%Y-%m-%d')),daysHeld,profitColor +'{:.2f}'.format(profits)+Back.RESET,  profitPercentage,totalSellUSD,totalBuyUSD]
         elif buyTransaction:
-            #TODO Avoid hardcoding eth price
-            ethPriceNow = 4811.89
+            #Takes the last historic price (get the keys, make it into a list and take the last item)
+            ethPriceNow = historicEthPrice[list(historicEthPrice.keys())[-1]]
             totalBuyUSD=0.0
             totalBuyETH=0.0
             countHolding = 0
