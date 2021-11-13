@@ -174,12 +174,15 @@ class NFT:
             return '{}\t\t{:.2f}\t'.format(self.nftName,sellTransaction.usdPrice)
 
     def getProfits(self):
-        buyTransaction,sellTransaction = self.__walletTransactions[0]
+        profits = 0.0
+        for walletTransaction in self.__walletTransactions: 
+            buyTransaction,sellTransaction = walletTransaction
 
-        if buyTransaction and sellTransaction and sellTransaction.transactionType != 'transfer':
-            return sellTransaction.usdPrice- buyTransaction.usdPrice
-        else:
-            return 0.0
+            # Only add to profits if both buy and sell transaction have a usdPrice
+            if buyTransaction and sellTransaction and sellTransaction.transactionType != 'transfer':
+                profits+= sellTransaction.usdPrice- buyTransaction.usdPrice
+
+        return profits
  
     def addBuyTransaction(self, transaction, isTransferEvent):
         existingBuyTransaction,existingSellTransaction = self.__walletTransactions[0]
@@ -189,13 +192,10 @@ class NFT:
                 #print("Creating new buy transaction for {}".format(self.nftName))
                 currentBuyTransaction,currentSellTransaction = walletTransaction
                 if currentBuyTransaction == None:
+                    if index > 0:
+                        print("Adding additional buy for {}".format(self.nftName))
                     self.__walletTransactions[index]=(transaction,currentSellTransaction)
                     return
-
-
-        if isTransferEvent==False:
-            #self.__buyTransaction = transaction 
-            self.__walletTransactions[0] = (transaction,existingSellTransaction)
         elif isTransferEvent==True and not existingBuyTransaction:
             #self.__buyTransaction = transaction   
             self.__walletTransactions[0] = (transaction,existingSellTransaction)
@@ -209,7 +209,6 @@ class NFT:
             _,lastSellTransaction = self.__walletTransactions[len(self.__walletTransactions)-1]
             if lastSellTransaction!= None:
                 print("Creating new sell transaction for {}".format(self.nftName))
-                print("Old sell {}".format(lastSellTransaction))
                 self.__walletTransactions.append((None,transaction))
                 return       
 
@@ -241,19 +240,39 @@ class NFT:
 
         if buyTransaction and sellTransaction:
             profitColor = Back.GREEN
-            if self.getProfits()<0:
+            profits = self.getProfits()
+            if profits<0:
                 profitColor = Back.RED
-            elif self.getProfits()==0:
+            elif profits==0:
                 profitColor = ''
+
+            totalSellUSD=0.0
+            totalBuyUSD=0.0
+            countSold = 0
+            daysHeld=0
+            #Sum together for multiple sales
+            for walletTransaction in self.__walletTransactions: 
+                buyTransaction,sellTransaction = walletTransaction
+                if buyTransaction and sellTransaction and sellTransaction.transactionType != 'transfer':
+                    totalBuyUSD += buyTransaction.usdPrice
+                    totalSellUSD += sellTransaction.usdPrice
+                    countSold+=1
+                    if daysHeld ==0:
+                        daysHeld =(sellTransaction.transactionDate- buyTransaction.transactionDate).days
+                    else:
+                        #Quasi average
+                        daysHeld = ((sellTransaction.transactionDate- buyTransaction.transactionDate).days + daysHeld)/2
 
             profitPercentage=0.0
             #Avoid divide by zero in rare cases
-            if buyTransaction.usdPrice>0.0:
-                profitPercentage = ((self.getProfits())/buyTransaction.usdPrice)*100
-            
-            daysHeld =(sellTransaction.transactionDate- buyTransaction.transactionDate).days
+            if totalBuyUSD >0.0:
+                profitPercentage = ((profits)/totalBuyUSD)*100
 
-            return [self.nftName,"{}".format(buyTransaction.transactionDate.strftime('%Y-%m-%d')),daysHeld,profitColor +'{:.2f}'.format(self.getProfits())+Back.RESET,  profitPercentage,sellTransaction.usdPrice,buyTransaction.usdPrice]
+            nftName = self.nftName
+            if countSold >1:
+                nftName += 'x{}'.format(countSold)
+
+            return [nftName,"{}".format(buyTransaction.transactionDate.strftime('%Y-%m-%d')),daysHeld,profitColor +'{:.2f}'.format(profits)+Back.RESET,  profitPercentage,totalSellUSD,totalBuyUSD]
         elif buyTransaction:
             #TODO Avoid hardcoding eth price
             ethPriceNow = 4811.89
