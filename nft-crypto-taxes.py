@@ -184,6 +184,15 @@ class NFT:
     def addBuyTransaction(self, transaction, isTransferEvent):
         existingBuyTransaction,existingSellTransaction = self.__walletTransactions[0]
 
+        if not isTransferEvent:
+            for index, walletTransaction in enumerate(self.__walletTransactions):
+                #print("Creating new buy transaction for {}".format(self.nftName))
+                currentBuyTransaction,currentSellTransaction = walletTransaction
+                if currentBuyTransaction == None:
+                    self.__walletTransactions[index]=(transaction,currentSellTransaction)
+                    return
+
+
         if isTransferEvent==False:
             #self.__buyTransaction = transaction 
             self.__walletTransactions[0] = (transaction,existingSellTransaction)
@@ -193,6 +202,16 @@ class NFT:
     
     def addSellTransaction(self, transaction, isTransferEvent):
         existingBuyTransaction,existingSellTransaction = self.__walletTransactions[0]
+
+        #Check if we've owned this NFT more than once
+        # if last entry in __walletTransactions already has a sellTransaction, add a new entry
+        if not isTransferEvent:
+            _,lastSellTransaction = self.__walletTransactions[len(self.__walletTransactions)-1]
+            if lastSellTransaction!= None:
+                print("Creating new sell transaction for {}".format(self.nftName))
+                print("Old sell {}".format(lastSellTransaction))
+                self.__walletTransactions.append((None,transaction))
+                return       
 
         if isTransferEvent==False:
             #self.__sellTransaction = transaction
