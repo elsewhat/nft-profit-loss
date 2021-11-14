@@ -4,6 +4,7 @@ Calculate tax related information for ERC721 and ERC1159 NFTs
 
 ## Usage
 Install dependencies via `pip3 install -r requirements.txt`
+
 Run `python3 nft-profit-loss.py <wallet id 0x...>`
 
 ## Output
