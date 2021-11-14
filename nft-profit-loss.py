@@ -98,7 +98,6 @@ class WalletNFTHistory:
                     #print('Add transaction to existing NFT')
                     nft = self.nfts.get(asset_id)
                 
-
                 if transaction.isSeller(self.wallet):
                     nft.addSellTransaction(copy.copy(transaction),isTransferEvent)                  
                 else:
@@ -429,7 +428,8 @@ class Transaction:
         self.walletBuyer= walletBuyer
 
     def isSeller(self,wallet):
-        if self.walletSeller==wallet:
+        #Important to make case-insensitive compare
+        if wallet and self.walletSeller and self.walletSeller.casefold()==wallet.casefold():
             return True
         else: 
             return False
