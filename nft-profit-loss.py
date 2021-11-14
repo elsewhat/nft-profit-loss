@@ -38,7 +38,7 @@ class WalletNFTHistory:
 
                 asset_id = openseaEvent['asset']['asset_contract']['address'] + '-' + openseaEvent['asset']['token_id']
                 
-                if openseaEvent['transaction']['timestamp']:
+                if openseaEvent['transaction'] and openseaEvent['transaction']['timestamp']:
                     transactionDate = datetime.strptime(openseaEvent['transaction']['timestamp'],'%Y-%m-%dT%H:%M:%S')
                 else:
                     print("WARNING: transaction.timestamp is null for {} ".format(asset_id) + " Using created_date instead which may cause some issues with days held calculation.")
