@@ -113,7 +113,7 @@ class WalletNFTHistory:
     
     def _getNftsTradeByContract(self,nftsTraded):
         #New table grouped by contract - A bit messy so consider splitting in to new function
-        nftsTradedByContract = PrettyTable(["Contract name","Profit USD","% profit","Sell USD","Buy USD"])
+        nftsTradedByContract = PrettyTable(["Contract name","Count","Profit USD","% profit","Sell USD","Buy USD"])
         nftsTradedByContract.set_style(DOUBLE_BORDER)
         nftsTradedByContract.float_format=".2"
         nftsTradedByContract.sortby="Profit USD"
@@ -126,24 +126,25 @@ class WalletNFTHistory:
             if row[7] in dataNFTSTradedByContract:
                 currentRow = dataNFTSTradedByContract[row[7]]
                 #Add to Sell USD and Buy USD
-                currentRow[3] +=  row[5]
-                currentRow[4] +=  row[6]
+                currentRow[4] +=  row[5]
+                currentRow[5] +=  row[6]
+                currentRow[1] +=  row[9]
             else:
                 contractName = row[8]
                 if contractName =='Unidentified contract':
                     contractName=row[7]
                 #Key contract hash, field sell USD and Buy USD used
-                dataNFTSTradedByContract[row[7]]=[contractName,0.0,0.0,row[5],row[6]]
+                dataNFTSTradedByContract[row[7]]=[contractName,row[9],0.0,0.0,row[5],row[6]]
 
         sumProfits = 0.0
         for row in dataNFTSTradedByContract:
             dataNFTTraded = dataNFTSTradedByContract[row]
             #Profit USD = Sell USD - Buy USD
-            dataNFTTraded[1]=dataNFTTraded[3]-dataNFTTraded[4]
-            sumProfits+=dataNFTTraded[1]
+            dataNFTTraded[2]=dataNFTTraded[4]-dataNFTTraded[5]
+            sumProfits+=dataNFTTraded[2]
             #% profit = ((profits)/totalBuyUSD)*100
-            if dataNFTTraded[4] >0.0:
-                dataNFTTraded[2] = ((dataNFTTraded[1])/dataNFTTraded[4])*100
+            if dataNFTTraded[5] >0.0:
+                dataNFTTraded[3] = ((dataNFTTraded[2])/dataNFTTraded[5])*100
 
             nftsTradedByContract.add_row(dataNFTSTradedByContract[row])
 
@@ -186,7 +187,7 @@ class WalletNFTHistory:
 
         #Table setup ref https://pypi.org/project/prettytable/
         #Note contract hash and name are not display, just used to generate a new table
-        nftsTraded = PrettyTable(["NFT name","Bought","Days held","Profit USD","% profit","Sell USD","Buy USD","Contract hash", "Contract name"])
+        nftsTraded = PrettyTable(["NFT name","Bought","Days held","Profit USD","% profit","Sell USD","Buy USD","Contract hash", "Contract name","Count"])
         nftsTraded.set_style(DOUBLE_BORDER)
         nftsTraded.float_format=".2"
         nftsTraded.sortby="Sell USD"
@@ -222,6 +223,7 @@ class WalletNFTHistory:
         #Remove the contract related columns from nftsTraded
         nftsTraded.del_column('Contract hash')
         nftsTraded.del_column('Contract name')
+        nftsTraded.del_column('Count')
 
         print("Profit pr NFT")
         print(nftsTraded)
@@ -382,7 +384,7 @@ class NFT:
             if countSold >1:
                 nftName += ' x {}'.format(countSold)
 
-            return [nftName,"{}".format(dateFirstBought.strftime('%Y-%m-%d')),daysHeld,profitColor +'{:.2f}'.format(profits)+Back.RESET,  profitPercentage,totalSellUSD,totalBuyUSD,self.contractAddress,self.contractName]
+            return [nftName,"{}".format(dateFirstBought.strftime('%Y-%m-%d')),daysHeld,profitColor +'{:.2f}'.format(profits)+Back.RESET,  profitPercentage,totalSellUSD,totalBuyUSD,self.contractAddress,self.contractName,countSold]
         elif buyTransaction:
             #Takes the last historic price (get the keys, make it into a list and take the last item)
             ethPriceNow = historicEthPrice[list(historicEthPrice.keys())[-1]]
