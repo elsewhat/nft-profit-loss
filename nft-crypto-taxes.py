@@ -100,7 +100,44 @@ class WalletNFTHistory:
                 print(ex)
                 print(json.dumps(openseaEvent,indent=4))
                 raise
-        
+    
+    def _getNftsTradeByContract(self,nftsTraded):
+        #New table grouped by contract - A bit messy so consider splitting in to new function
+        nftsTradedByContract = PrettyTable(["Contract name","Profit USD","% profit","Sell USD","Buy USD"])
+        nftsTradedByContract.set_style(DOUBLE_BORDER)
+        nftsTradedByContract.float_format=".2"
+        nftsTradedByContract.sortby="Profit USD"
+        nftsTradedByContract.reversesort=True
+        nftsTradedByContract.align = "l"
+        #Use the data in nftsTraded as basis
+        dataTradedNfts = nftsTraded.rows
+        dataNFTSTradedByContract={}
+        for row in dataTradedNfts:
+            if row[7] in dataNFTSTradedByContract:
+                currentRow = dataNFTSTradedByContract[row[7]]
+                #Add to Sell USD and Buy USD
+                currentRow[3] +=  row[5]
+                currentRow[4] +=  row[6]
+            else:
+                contractName = row[8]
+                if contractName =='Unidentified contract':
+                    contractName=row[7]
+                #Key contract hash, field sell USD and Buy USD used
+                dataNFTSTradedByContract[row[7]]=[contractName,0.0,0.0,row[5],row[6]]
+
+        sumProfits = 0.0
+        for row in dataNFTSTradedByContract:
+            dataNFTTraded = dataNFTSTradedByContract[row]
+            #Profit USD = Sell USD - Buy USD
+            dataNFTTraded[1]=dataNFTTraded[3]-dataNFTTraded[4]
+            sumProfits+=dataNFTTraded[1]
+            #% profit = ((profits)/totalBuyUSD)*100
+            if dataNFTTraded[4] >0.0:
+                dataNFTTraded[2] = ((dataNFTTraded[1])/dataNFTTraded[4])*100
+
+            nftsTradedByContract.add_row(dataNFTSTradedByContract[row])
+
+        return nftsTradedByContract
 
     def listNFTs(self):
         
@@ -140,39 +177,7 @@ class WalletNFTHistory:
             nft.addToReport(nftsOnlySold,self.REPORT_ONLY_SOLD,self.historicEthPrice)
 
         #New table grouped by contract
-        nftsTradedByContract = PrettyTable(["Contract name","Profit USD","% profit","Sell USD","Buy USD"])
-        nftsTradedByContract.set_style(DOUBLE_BORDER)
-        nftsTradedByContract.float_format=".2"
-        nftsTradedByContract.sortby="Profit USD"
-        nftsTradedByContract.reversesort=True
-        nftsTradedByContract.align = "l"
-        #Use the data in nftsTraded as basis
-        dataTradedNfts = nftsTraded.rows
-        dataNFTSTradedByContract={}
-        for row in dataTradedNfts:
-            if row[7] in dataNFTSTradedByContract:
-                currentRow = dataNFTSTradedByContract[row[7]]
-                #Add to Sell USD and Buy USD
-                currentRow[3] +=  row[5]
-                currentRow[4] +=  row[6]
-            else:
-                contractName = row[8]
-                if contractName =='Unidentified contract':
-                    contractName=row[7]
-                #Key contract hash, field sell USD and Buy USD used
-                dataNFTSTradedByContract[row[7]]=[contractName,0.0,0.0,row[5],row[6]]
-
-        sumProfits = 0.0
-        for row in dataNFTSTradedByContract:
-            dataNFTTraded = dataNFTSTradedByContract[row]
-            #Profit USD = Sell USD - Buy USD
-            dataNFTTraded[1]=dataNFTTraded[3]-dataNFTTraded[4]
-            sumProfits+=dataNFTTraded[1]
-            #% profit = ((profits)/totalBuyUSD)*100
-            if dataNFTTraded[4] >0.0:
-                dataNFTTraded[2] = ((dataNFTTraded[1])/dataNFTTraded[4])*100
-
-            nftsTradedByContract.add_row(dataNFTSTradedByContract[row])
+        nftsTradedByContract=self._getNftsTradeByContract(nftsTraded)
         
 
         #Remove the contract related columns from nftsTraded
@@ -183,7 +188,7 @@ class WalletNFTHistory:
         print(nftsTraded)
         print("Profit pr contract")
         print(nftsTradedByContract)
-        print("Total profits: {:.2f}".format(sumProfits))
+        #print("Total profits: {:.2f}".format(sumProfits))
 
         #print("Profits (USD) {:.2f}".format(profits))
         
