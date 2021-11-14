@@ -1,5 +1,5 @@
 # nft-profit-loss
-Calculate tax related information for ERC721 and ERC1159 NFTs
+Calculate proift loss related information for ERC721 and ERC1159 NFTs
 
 
 ## Usage
