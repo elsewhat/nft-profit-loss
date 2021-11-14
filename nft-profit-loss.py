@@ -49,7 +49,15 @@ class WalletNFTHistory:
                     
                     payment_token = openseaEvent.get('payment_token')
                     #Lookup eth price from dictionary (key is 'yyyy-mm-dd')
-                    ethpriceAtTransaction = self.historicEthPrice[transactionDate.strftime('%Y-%m-%d')]
+                    transactionYYYYMMDD = transactionDate.strftime('%Y-%m-%d')
+                    if transactionYYYYMMDD in self.historicEthPrice:
+                        ethpriceAtTransaction = self.historicEthPrice[transactionYYYYMMDD]
+                    else:
+                        # Dict keys are ordered ref https://stackoverflow.com/a/16125237/250787 so safe to do this
+                        keyLastDate = list(self.historicEthPrice.keys())[-1]
+                        ethpriceAtTransaction = self.historicEthPrice[keyLastDate]
+                        print("WARNING: ethprice.csv does not contain a value for {}. Using value {:.2f} for {} instead.".format(transactionYYYYMMDD,ethpriceAtTransaction,keyLastDate) )
+
                     priceInWei = float(openseaEvent['total_price'])
                     paymentToken = payment_token.get('symbol')
                     usdPrice = (priceInWei*1.0e-18)*ethpriceAtTransaction
@@ -533,8 +541,8 @@ def main():
         walletNFTHistory.listNFTs()            
     except HTTPError as error:
         print(error)
-        print(json.dumps(error.response.json()),indent=4)
-    #
+        print(error.response.text())
+    
 
 
 if __name__ == '__main__':
