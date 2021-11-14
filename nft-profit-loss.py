@@ -33,13 +33,16 @@ class WalletNFTHistory:
 
                 #id of asset
                 if not openseaEvent['asset'] and openseaEvent['asset_bundle']:
-                    print("Bundles from OpenSea are currently not supported. Skipped bundle \"{}\"".format(openseaEvent['asset_bundle']['name'] ))
+                    print("WARNING: Bundles from OpenSea are currently not supported. Skipped bundle \"{}\"".format(openseaEvent['asset_bundle']['name'] ))
                     continue
 
                 asset_id = openseaEvent['asset']['asset_contract']['address'] + '-' + openseaEvent['asset']['token_id']
                 
-
-                transactionDate = datetime.strptime(openseaEvent['transaction']['timestamp'],'%Y-%m-%dT%H:%M:%S')
+                if openseaEvent['transaction']['timestamp']:
+                    transactionDate = datetime.strptime(openseaEvent['transaction']['timestamp'],'%Y-%m-%dT%H:%M:%S')
+                else:
+                    print("WARNING: transaction.timestamp is null for {} ".format(asset_id) + " Using created_date instead which may cause some issues with days held calculation.")
+                    transactionDate = datetime.strptime(openseaEvent['created_date'],'%Y-%m-%dT%H:%M:%S.%f')
 
                 if eventType=='successful':
                     #ethereum_usd_price_now = float(payment_token.get('usd_price'))
@@ -197,9 +200,6 @@ class WalletNFTHistory:
         nftsOnlySold.reversesort=True  
         nftsOnlySold.align = "l"          
 
-        profits = 0.0
-        totalBuyForUnsold=0.0
-        totalSoldMissingBuy=0.0
         hasNftsOnlySold=False
         for nftKey in self.nfts:
             nft = self.nfts[nftKey]
@@ -230,12 +230,26 @@ class WalletNFTHistory:
         print("Currently holding:")
         print(nftsHolding)
         print(nftsHoldingByContract)
-        #print("Total buy price for unsold nfts {:.2f}".format(totalBuyForUnsold))
-
+        
         if hasNftsOnlySold:
             print("Missing buy transaction:")
             #print("Total sell price where missing buy transaction {:.2f} USD".format(totalSoldMissingBuy))
             print(nftsOnlySold)
+
+        sumProfits = 0.0
+        dataNFTSTraded= nftsTraded.rows
+        for row in dataNFTSTraded:
+            # Cannot use Profit USD field as it is a string due to coloring
+            #Using (sell USD-buy USD)
+            sumProfits += (row[5]-row[6])
+        print("Sum profits: {:.2f} USD".format(sumProfits))
+        sumBuyForUnsold = 0.0
+        dataNFTSHolding= nftsHolding.rows
+        for row in dataNFTSHolding:
+            sumBuyForUnsold += row[3]        
+        print("Sum buy price for unsold nfts: {:.2f} USD".format(sumBuyForUnsold))
+
+        print("\nDisclaimer: These numbers are based on transaction available in the OpenSea API.\nThe prices do not include minting cost nor transaction costs.\nThe numbers are not thoroughly vetted, so don't use as a basis for Tax reporting purposes.\nMade by elsewhat.eth - @dparnas")
 
 class NFT:
     def __init__(self, contractAddress,contractName,nftName,nftDescription,contractTokenId,openseaLink,imageUrl,imagePreviewUrl):
@@ -279,8 +293,8 @@ class NFT:
                 #print("Creating new buy transaction for {}".format(self.nftName))
                 currentBuyTransaction,currentSellTransaction = walletTransaction
                 if currentBuyTransaction == None:
-                    if index > 0:
-                        print("Adding additional buy for {}".format(self.nftName))
+                    #if index > 0:
+                        #print("Adding additional buy for {}".format(self.nftName))
                     self.__walletTransactions[index]=(transaction,currentSellTransaction)
                     return
         elif isTransferEvent==True and not existingBuyTransaction:
@@ -295,7 +309,7 @@ class NFT:
         if not isTransferEvent:
             _,lastSellTransaction = self.__walletTransactions[len(self.__walletTransactions)-1]
             if lastSellTransaction!= None:
-                print("Creating new sell transaction for {}".format(self.nftName))
+                #print("Creating new sell transaction for {}".format(self.nftName))
                 self.__walletTransactions.append((None,transaction))
                 return       
 
@@ -341,13 +355,14 @@ class NFT:
             #Sum together for multiple sales
             for walletTransaction in self.__walletTransactions: 
                 buyTransaction,sellTransaction = walletTransaction
-                countSold+=1
-                if buyTransaction.transactionDate< dateFirstBought:
-                    dateFirstBought=buyTransaction.transactionDate
-                daysHeld =(sellTransaction.transactionDate- buyTransaction.transactionDate).days
-                if buyTransaction and sellTransaction and sellTransaction.transactionType != 'transfer':
-                    totalBuyUSD += buyTransaction.usdPrice
-                    totalSellUSD += sellTransaction.usdPrice
+                if buyTransaction and sellTransaction:
+                    countSold+=1
+                    if buyTransaction.transactionDate< dateFirstBought:
+                        dateFirstBought=buyTransaction.transactionDate
+                    daysHeld =(sellTransaction.transactionDate- buyTransaction.transactionDate).days
+                    if buyTransaction and sellTransaction and sellTransaction.transactionType != 'transfer':
+                        totalBuyUSD += buyTransaction.usdPrice
+                        totalSellUSD += sellTransaction.usdPrice
                     
 
             daysHeld= int(daysHeld/countSold)
