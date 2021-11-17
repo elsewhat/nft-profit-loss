@@ -10,7 +10,7 @@ def main():
         requestDate = datetime.datetime(2015,7,30)
         endDate = datetime.datetime(2015,12,31)
 
-        headers = { 'Authorization':'Authorization: Bearer abd90df5f27a7b170cd775abf89d632b350b7c1c9d53e08b340cd9832ce52c2c'}    
+        headers = { 'Authorization':'Authorization: Bearer '}    
         while requestDate <= endDate:
             query = {'date': requestDate.strftime('%Y-%m-%d') }
 
