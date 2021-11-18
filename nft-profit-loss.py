@@ -1,5 +1,6 @@
 
 from requests import Request, Session, HTTPError
+import requests
 import sys
 import copy
 import json
@@ -307,6 +308,17 @@ class NFT:
                     self.__walletTransactions[index]=(transaction,currentSellTransaction)
                     return
         elif isTransferEvent==True and not existingBuyTransaction:
+            transactionLookupURL = "https://api.blockcypher.com/v1/eth/main/txs/{}".format(transaction.transactionHash)
+            print("REQUEST: {}".format(transactionLookupURL))
+            try:
+                response = requests.get(transactionLookupURL)
+                ethPrice = response['total']*1.0e-18
+                print("Adding {:.2f} to transaction {}".format(ethPrice,transaction.transactionHash))
+                transaction.price = ethPrice
+                transaction.recalculateUSDPrice()
+            except requests.exceptions.HTTPError as error:
+                print(error)
+
             #self.__buyTransaction = transaction   
             self.__walletTransactions[0] = (transaction,existingSellTransaction)
     
@@ -441,6 +453,18 @@ class Transaction:
             return True
         else: 
             return False
+
+    def recalculateUSDPrice(self,historicEthPrice):
+        transactionYYYYMMDD = self.transactionDate.strftime('%Y-%m-%d')
+        if transactionYYYYMMDD in historicEthPrice:
+            ethpriceAtTransaction = historicEthPrice[transactionYYYYMMDD]
+        else:
+            # Dict keys are ordered ref https://stackoverflow.com/a/16125237/250787 so safe to do this
+            keyLastDate = list(historicEthPrice.keys())[-1]
+            ethpriceAtTransaction = historicEthPrice[keyLastDate]
+            print("WARNING: ethprice.csv does not contain a value for {}. Using value {:.2f} for {} instead.".format(transactionYYYYMMDD,ethpriceAtTransaction,keyLastDate) )
+        
+        self.usdPrice = self.price*ethpriceAtTransaction
 
     
 
