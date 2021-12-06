@@ -73,17 +73,25 @@ class WalletNFTHistory:
                 walletSeller = openseaEvent['seller']
                 if walletSeller is not None:
                     walletSeller = walletSeller['address']
+
+                #Seller fee  = opensea cut + collection owner cut
+                sellerFeeFactor = 0.0
+                if openseaEvent['asset']['asset_contract']['opensea_seller_fee_basis_points'] and openseaEvent['asset']['asset_contract']['seller_fee_basis_points']:
+                    sellerFeeFactor = (openseaEvent['asset']['asset_contract']['opensea_seller_fee_basis_points'] +openseaEvent['asset']['asset_contract']['seller_fee_basis_points'])/10000.0
+                
+
+
                 
                 isTransferEvent = False
                 if eventType=='successful':
-                    transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],transactionDate,eventType,priceInETH,openseaEvent['quantity'], paymentToken, usdPrice, walletSeller, openseaEvent['winner_account']['address'])
+                    transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],transactionDate,eventType,priceInETH,openseaEvent['quantity'], paymentToken, usdPrice, sellerFeeFactor,walletSeller, openseaEvent['winner_account']['address'])
                 elif eventType=='transfer':
                     isTransferEvent=True
                     if openseaEvent['transaction']:
                         transactionHash = openseaEvent['transaction']['transaction_hash']
                     else:#Some older transer events have transaction: null
                         transactionHash = openseaEvent['created_date']
-                    transaction  = Transaction(transactionHash,transactionDate,eventType,priceInETH,openseaEvent['quantity'], paymentToken, usdPrice, openseaEvent['from_account']['address'], openseaEvent['to_account']['address'])
+                    transaction  = Transaction(transactionHash,transactionDate,eventType,priceInETH,openseaEvent['quantity'], paymentToken, usdPrice,sellerFeeFactor, openseaEvent['from_account']['address'], openseaEvent['to_account']['address'])
                 else:
                     print("Unsupported event {}".format(eventType))
                     raise
@@ -104,6 +112,8 @@ class WalletNFTHistory:
                 if transaction.isSeller(self.wallet):
                     nft.addSellTransaction(copy.copy(transaction),isTransferEvent,self)                  
                 else:
+                    #We don't care about seller fee factor for these
+                    transaction.sellerFeeFactor=0.0
                     nft.addBuyTransaction(copy.copy(transaction),isTransferEvent,self)   
                  
                 
@@ -261,7 +271,7 @@ class WalletNFTHistory:
             sumBuyForUnsold += row[3]        
         print("Sum buy price for unsold nfts: {:.2f} USD".format(sumBuyForUnsold))
 
-        print("\nDisclaimer: These numbers are based on transaction available in the OpenSea API.\nThe prices do not include minting cost nor transaction costs.\nThe numbers are not thoroughly vetted, so don't use as a basis for Tax reporting purposes.\nMade by elsewhat.eth - @dparnas")
+        print("\nDisclaimer: These numbers are based on transaction available in the OpenSea API.\nThe prices usually contains minting and seller fees.\nPrices do not include transaction costs.\nThe numbers are not thoroughly vetted, so don't use as a basis for Tax reporting purposes.\nMade by elsewhat.eth - @dparnas")
 
 class NFT:
     def __init__(self, contractAddress,contractName,nftName,nftDescription,contractTokenId,openseaLink,imageUrl,imagePreviewUrl):
@@ -317,7 +327,7 @@ class NFT:
                 transactionLookup = response.json()
                 ethPrice = transactionLookup['total']*1.0e-18
                 if ethPrice > 0.0:
-                    print("Adding {:.2f} to transaction {}".format(ethPrice,transaction.transactionHash))
+                    print("Adding {:.2f} of mint cost to transaction {}".format(ethPrice,transaction.transactionHash))
                     transaction.price = ethPrice
                     transaction.recalculateUSDPrice(walletNFTHistory.historicEthPrice)
             except requests.exceptions.HTTPError as error:
@@ -388,7 +398,8 @@ class NFT:
                     daysHeld =(sellTransaction.transactionDate- buyTransaction.transactionDate).days
                     if buyTransaction and sellTransaction and sellTransaction.transactionType != 'transfer':
                         totalBuyUSD += buyTransaction.usdPrice
-                        totalSellUSD += sellTransaction.usdPrice
+                        #Reduce usd price based on the seller fee (usually 2.5% opensea and x% collection owner)
+                        totalSellUSD += sellTransaction.usdPrice * (1.0-sellTransaction.sellerFeeFactor)
                     
 
             daysHeld= int(daysHeld/countSold)
@@ -435,7 +446,7 @@ class NFT:
             return [self.nftName,"{}".format(sellTransaction.transactionDate.strftime('%Y-%m-%d')), '', '',sellTransaction.usdPrice,'']   
 
 class Transaction:
-    def __init__(self, transactionHash,transactionDate,transactionType, price,quantity,paymentToken, usdPrice, walletSeller, walletBuyer):
+    def __init__(self, transactionHash,transactionDate,transactionType, price,quantity,paymentToken, usdPrice, sellerFeeFactor, walletSeller, walletBuyer):
         self.transactionHash=transactionHash
         self.transactionDate=transactionDate
         self.transactionType=transactionType
@@ -443,6 +454,7 @@ class Transaction:
         self.quantity = quantity
         self.paymentToken=paymentToken
         self.usdPrice=usdPrice
+        self.sellerFeeFactor = sellerFeeFactor
         self.walletSeller=walletSeller
         self.walletBuyer= walletBuyer
 
