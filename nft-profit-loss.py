@@ -1,5 +1,6 @@
 
 from requests import Request, Session, HTTPError
+import requests
 import sys
 import copy
 import json
@@ -59,10 +60,12 @@ class WalletNFTHistory:
                         print("WARNING: ethprice.csv does not contain a value for {}. Using value {:.2f} for {} instead.".format(transactionYYYYMMDD,ethpriceAtTransaction,keyLastDate) )
 
                     priceInWei = float(openseaEvent['total_price'])
+                    priceInETH = priceInWei*1.0e-18
                     paymentToken = payment_token.get('symbol')
-                    usdPrice = (priceInWei*1.0e-18)*ethpriceAtTransaction
+                    usdPrice = priceInETH*ethpriceAtTransaction
                 else:
                     priceInWei=0
+                    priceInETH=0
                     usdPrice=0.0
                     paymentToken=None
 
@@ -73,14 +76,14 @@ class WalletNFTHistory:
                 
                 isTransferEvent = False
                 if eventType=='successful':
-                    transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],transactionDate,eventType,priceInWei,openseaEvent['quantity'], paymentToken, usdPrice, walletSeller, openseaEvent['winner_account']['address'])
+                    transaction  = Transaction(openseaEvent['transaction']['transaction_hash'],transactionDate,eventType,priceInETH,openseaEvent['quantity'], paymentToken, usdPrice, walletSeller, openseaEvent['winner_account']['address'])
                 elif eventType=='transfer':
                     isTransferEvent=True
                     if openseaEvent['transaction']:
                         transactionHash = openseaEvent['transaction']['transaction_hash']
                     else:#Some older transer events have transaction: null
                         transactionHash = openseaEvent['created_date']
-                    transaction  = Transaction(transactionHash,transactionDate,eventType,priceInWei,openseaEvent['quantity'], paymentToken, usdPrice, openseaEvent['from_account']['address'], openseaEvent['to_account']['address'])
+                    transaction  = Transaction(transactionHash,transactionDate,eventType,priceInETH,openseaEvent['quantity'], paymentToken, usdPrice, openseaEvent['from_account']['address'], openseaEvent['to_account']['address'])
                 else:
                     print("Unsupported event {}".format(eventType))
                     raise
@@ -99,9 +102,9 @@ class WalletNFTHistory:
                     nft = self.nfts.get(asset_id)
                 
                 if transaction.isSeller(self.wallet):
-                    nft.addSellTransaction(copy.copy(transaction),isTransferEvent)                  
+                    nft.addSellTransaction(copy.copy(transaction),isTransferEvent,self)                  
                 else:
-                    nft.addBuyTransaction(copy.copy(transaction),isTransferEvent)   
+                    nft.addBuyTransaction(copy.copy(transaction),isTransferEvent,self)   
                  
                 
                 self.nfts[asset_id]= nft
@@ -294,7 +297,7 @@ class NFT:
 
         return profits
  
-    def addBuyTransaction(self, transaction, isTransferEvent):
+    def addBuyTransaction(self, transaction, isTransferEvent, walletNFTHistory):
         existingBuyTransaction,existingSellTransaction = self.__walletTransactions[0]
 
         if not isTransferEvent:
@@ -307,10 +310,24 @@ class NFT:
                     self.__walletTransactions[index]=(transaction,currentSellTransaction)
                     return
         elif isTransferEvent==True and not existingBuyTransaction:
+            transactionLookupURL = "https://api.blockcypher.com/v1/eth/main/txs/{}".format(transaction.transactionHash)
+            print("REQUEST: {}".format(transactionLookupURL))
+            try:
+                response = requests.get(transactionLookupURL)
+                transactionLookup = response.json()
+                ethPrice = transactionLookup['total']*1.0e-18
+                if ethPrice > 0.0:
+                    print("Adding {:.2f} to transaction {}".format(ethPrice,transaction.transactionHash))
+                    transaction.price = ethPrice
+                    transaction.recalculateUSDPrice(walletNFTHistory.historicEthPrice)
+            except requests.exceptions.HTTPError as error:
+                print(transactionLookup)
+                print(error)
+
             #self.__buyTransaction = transaction   
             self.__walletTransactions[0] = (transaction,existingSellTransaction)
     
-    def addSellTransaction(self, transaction, isTransferEvent):
+    def addSellTransaction(self, transaction, isTransferEvent,walletNFTHistory):
         existingBuyTransaction,existingSellTransaction = self.__walletTransactions[0]
 
         #Check if we've owned this NFT more than once
@@ -400,7 +417,7 @@ class NFT:
                     dateFirstBought=buyTransaction.transactionDate              
                 if buyTransaction:
                     totalBuyUSD += buyTransaction.usdPrice
-                    totalBuyETH += buyTransaction.price*1.0e-18
+                    totalBuyETH += buyTransaction.price
                     countHolding+=1
                     daysHeld +=(datetime.now()- buyTransaction.transactionDate).days
 
@@ -442,6 +459,18 @@ class Transaction:
         else: 
             return False
 
+    def recalculateUSDPrice(self,historicEthPrice):
+        transactionYYYYMMDD = self.transactionDate.strftime('%Y-%m-%d')
+        if transactionYYYYMMDD in historicEthPrice:
+            ethpriceAtTransaction = historicEthPrice[transactionYYYYMMDD]
+        else:
+            # Dict keys are ordered ref https://stackoverflow.com/a/16125237/250787 so safe to do this
+            keyLastDate = list(historicEthPrice.keys())[-1]
+            ethpriceAtTransaction = historicEthPrice[keyLastDate]
+            print("WARNING: ethprice.csv does not contain a value for {}. Using value {:.2f} for {} instead.".format(transactionYYYYMMDD,ethpriceAtTransaction,keyLastDate) )
+        
+        self.usdPrice = self.price*ethpriceAtTransaction
+
     
 
     def __str__(self):
@@ -462,7 +491,7 @@ def getHistoricEthPrice():
 
 def main():
     wallet = sys.argv[1]
-    #openseaAPIKey = sys.argv[1]
+    openseaAPIKey = sys.argv[2]
 
     # Parse ethprice.csv into a dict object 
     historicEthPrice = getHistoricEthPrice()
@@ -479,7 +508,7 @@ def main():
                 'offset': 0,
                 'limit':300}
 
-    headers = { #'X-API-KEY': 'xxx',
+    headers = { 'X-API-KEY': openseaAPIKey,
                 'Accepts':'application/json'}      
     #print(query)
     try:
