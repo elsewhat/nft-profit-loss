@@ -112,8 +112,6 @@ class WalletNFTHistory:
                 if transaction.isSeller(self.wallet):
                     nft.addSellTransaction(copy.copy(transaction),isTransferEvent,self)                  
                 else:
-                    #We don't care about seller fee factor for these
-                    transaction.sellerFeeFactor=0.0
                     nft.addBuyTransaction(copy.copy(transaction),isTransferEvent,self)   
                  
                 
@@ -303,7 +301,8 @@ class NFT:
 
             # Only add to profits if both buy and sell transaction have a usdPrice
             if buyTransaction and sellTransaction and sellTransaction.transactionType != 'transfer':
-                profits+= sellTransaction.usdPrice- buyTransaction.usdPrice
+                #Reduce sellTransaction on the seller fee (usually 2.5% opensea and x% collection owner)
+                profits+= (sellTransaction.usdPrice * (1.0-sellTransaction.sellerFeeFactor))- buyTransaction.usdPrice
 
         return profits
  
