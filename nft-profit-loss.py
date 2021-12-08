@@ -76,8 +76,8 @@ class WalletNFTHistory:
 
                 #Seller fee  = opensea cut + collection owner cut
                 sellerFeeFactor = 0.0
-                if openseaEvent['asset']['asset_contract']['opensea_seller_fee_basis_points'] and openseaEvent['asset']['asset_contract']['seller_fee_basis_points']:
-                    sellerFeeFactor = (openseaEvent['asset']['asset_contract']['opensea_seller_fee_basis_points'] +openseaEvent['asset']['asset_contract']['seller_fee_basis_points'])/10000.0
+                if openseaEvent['asset']['asset_contract']['seller_fee_basis_points']:
+                    sellerFeeFactor = openseaEvent['asset']['asset_contract']['seller_fee_basis_points']/10000.0
                 
 
 
@@ -174,18 +174,18 @@ class WalletNFTHistory:
         dataHoldingNfts = nftsHolding.rows
         dataNFTSHoldingByContract={}
         for row in dataHoldingNfts:
-            if row[6] in dataNFTSHoldingByContract:
-                currentRow = dataNFTSHoldingByContract[row[6]]
+            if row[7] in dataNFTSHoldingByContract:
+                currentRow = dataNFTSHoldingByContract[row[7]]
                 #Add to Count holding, buy usd and buy eth
                 currentRow[1] += 1
                 currentRow[2] +=  row[3]
                 currentRow[3] +=  row[4]
             else:
-                contractName = row[7]
+                contractName = row[8]
                 if contractName =='Unidentified contract':
-                    contractName=row[6]
+                    contractName=row[7]
                 #Key contract hash, field sell USD and Buy USD used
-                dataNFTSHoldingByContract[row[6]]=[contractName,1,row[3],row[4]]
+                dataNFTSHoldingByContract[row[7]]=[contractName,1,row[3],row[4]]
 
         for row in dataNFTSHoldingByContract:
             nftsHoldingByContract.add_row(dataNFTSHoldingByContract[row])
@@ -205,7 +205,7 @@ class WalletNFTHistory:
         nftsTraded.reversesort=True
         nftsTraded.align = "l"
 
-        nftsHolding = PrettyTable(["NFT name","Bought","Days held","Buy USD","Buy ETH","Break-even ETH","Contract hash", "Contract name"])
+        nftsHolding = PrettyTable(["NFT name","Bought","Days held","Buy USD","Buy ETH","Break-even ETH","Sales fee","Contract hash", "Contract name"])
         nftsHolding.set_style(DOUBLE_BORDER)
         nftsHolding.float_format=".2"
         nftsHolding.sortby="Buy USD"
@@ -439,7 +439,9 @@ class NFT:
             if countHolding >1:
                 nftName += ' x {}'.format(countHolding)
 
-            return [nftName,"{}".format(dateFirstBought.strftime('%Y-%m-%d')),daysHeld,totalBuyUSD, avgBuyEth, breakEven,self.contractAddress,self.contractName]
+            salesFee = buyTransaction.sellerFeeFactor*100.0
+
+            return [nftName,"{}".format(dateFirstBought.strftime('%Y-%m-%d')),daysHeld,totalBuyUSD, avgBuyEth, breakEven,salesFee,self.contractAddress,self.contractName]
         elif sellTransaction:
             #Does not handle multiple of the same nft held , but that's ok
             return [self.nftName,"{}".format(sellTransaction.transactionDate.strftime('%Y-%m-%d')), '', '',sellTransaction.usdPrice,'']   
