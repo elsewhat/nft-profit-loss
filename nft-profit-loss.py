@@ -314,6 +314,7 @@ class NFT:
             print("REQUEST: {}".format(transactionLookupURL))
             try:
                 response = requests.get(transactionLookupURL)
+                response.raise_for_status()
                 transactionLookup = response.json()
                 ethPrice = transactionLookup['total']*1.0e-18
                 if ethPrice > 0.0:
@@ -321,7 +322,6 @@ class NFT:
                     transaction.price = ethPrice
                     transaction.recalculateUSDPrice(walletNFTHistory.historicEthPrice)
             except requests.exceptions.HTTPError as error:
-                print(transactionLookup)
                 print(error)
 
             #self.__buyTransaction = transaction   
