@@ -7,8 +7,8 @@ def main():
     outputFilename = sys.argv[1]
     with open(outputFilename, 'w') as outputFile:
 
-        requestDate = datetime.datetime(2015,7,30)
-        endDate = datetime.datetime(2015,12,31)
+        requestDate = datetime.datetime(2022,1,1)
+        endDate = datetime.datetime(2022,2,13)
 
         headers = { 'Authorization':'Authorization: Bearer '}    
         while requestDate <= endDate:
