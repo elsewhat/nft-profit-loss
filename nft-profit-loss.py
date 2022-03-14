@@ -524,17 +524,14 @@ def main():
     headers = { 'X-API-KEY': openseaAPIKey,
                 'Accepts':'application/json'}      
     #print(query)
+    cursor = None
     try:
-        offset=0
         httpOpenSeaSession = Session()
+        query = {   
+            'account_address': wallet, 
+            'event_type': 'successful', 
+            'only_opensea': False}        
         while True:
-            query = {   
-                'account_address': wallet, 
-                'event_type': 'successful', 
-                'only_opensea': False,
-                'offset': offset,
-                'limit': 300}
-
             httpRequest = Request('GET','https://api.opensea.io/api/v1/events', params=query,headers=headers)
             httpRequest = httpRequest.prepare()
             print("REQUEST: {}".format(httpRequest.url))
@@ -543,25 +540,21 @@ def main():
             response.raise_for_status()
 
             openseaEvents = response.json()
-            if not openseaEvents['asset_events']:
-                #No events returned from Opensea API indicating no more pages
-                break
-            elif offset+300 > 10000:
-                print("WARNING: OpenSea API does not currently support more than 10 000 events. Skipping remaining ones")
-                break            
-            else:
+            if openseaEvents['asset_events']:
                 walletNFTHistory.processOpenseaAPIResponse(openseaEvents)
-            
-            # Additional code will only run if the request is successful
-            offset+=300
-        offset= 0
+                cursor = openseaEvents['next']
+                query['cursor']=cursor
+                if not cursor:
+                    print("Cursor: {}".format(cursor))
+                    break
+            else:
+                print("ERROR: Got asset_events from OpenSea. Content:{}".format(openseaEvents))
+                break
+        query = {   
+            'account_address': wallet, 
+            'event_type': 'transfer',
+            'only_opensea': False}
         while True:
-            query = {   
-                'account_address': wallet, 
-                'event_type': 'transfer',
-                'only_opensea': False,
-                'offset': offset,
-                'limit': 300}
             httpRequest = Request('GET','https://api.opensea.io/api/v1/events', params=query,headers=headers)
             httpRequest = httpRequest.prepare()
             print("REQUEST: {}".format(httpRequest.url))
@@ -570,23 +563,21 @@ def main():
             response.raise_for_status()
 
             openseaEvents = response.json()
-            if not openseaEvents['asset_events']:
-                #No events returned from Opensea API indicating no more pages
-                break
-            elif offset+300 > 10000:
-                print("WARNING: OpenSea API does not currently support more than 10 000 events. Skipping remaining ones")
-                break
-            else:
+            openseaEvents = response.json()
+            if openseaEvents['asset_events']:
                 walletNFTHistory.processOpenseaAPIResponse(openseaEvents)
-            
-            # Additional code will only run if the request is successful
-            offset+=300            
-
+                cursor = openseaEvents['next']
+                query['cursor']=cursor
+                if not cursor:
+                    print("Cursor: {}".format(cursor))
+                    break
+            else:
+                print("ERROR: Got asset_events from OpenSea. Content:{}".format(openseaEvents))
+                break
         walletNFTHistory.listNFTs()            
     except HTTPError as error:
         print(error)
-        print(error.response.text())
-    
+        print(error.response.text())                
 
 
 if __name__ == '__main__':
